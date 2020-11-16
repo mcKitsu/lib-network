@@ -9,7 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
 
 public class NetClient extends NetChannel{
-    public final NetClientEvent event;
+    public final Event event;
 
     private final NetClientSlotManager slotManager;
     private final ExecutorService executorService;
@@ -20,7 +20,7 @@ public class NetClient extends NetChannel{
     protected NetClient(TcpChannel tcpChannel, byte[] verifyKey, ExecutorService executorService) throws IOException {
         super(tcpChannel, verifyKey);
         this.executorService = executorService;
-        this.event = new NetClientEvent(getExecutor());
+        this.event = new Event(getExecutor());
         this.slotManager = this.constructSlotManager();
     }
 
@@ -31,7 +31,7 @@ public class NetClient extends NetChannel{
     public NetClient(byte[] verifyKey, ExecutorService executorService) throws IOException {
         super(verifyKey);
         this.executorService = executorService;
-        this.event = new NetClientEvent(getExecutor());
+        this.event = new Event(getExecutor());
         this.slotManager = this.constructSlotManager();
     }
 
@@ -127,6 +127,8 @@ public class NetClient extends NetChannel{
 
             @Override
             protected boolean onAlloc(NetClientSlot netClientSlot) {
+
+
                 if(NetClient.this.event.onAccept == null)
                     return false;
 
@@ -139,14 +141,14 @@ public class NetClient extends NetChannel{
     /* **************************************************************************************
      *  Class Event
      */
-    public static class NetClientEvent extends EventHandler{
+    public static class Event extends EventHandler{
         private @Setter Runnable onDisconnect;
         private @Setter Runnable onRemoteDisconnect;
         private @Setter Runnable onConnectFail;
         private @Setter Consumer<NetClient> onConnect;
         private @Setter Consumer<NetClientSlot> onAccept;
 
-        private NetClientEvent(Executor executor){
+        private Event(Executor executor){
             super(executor);
         }
 
@@ -168,6 +170,15 @@ public class NetClient extends NetChannel{
 
         protected boolean onAccept(NetClientSlot netClientSlot){
             return execute(this.onAccept, netClientSlot);
+        }
+
+        public void setEvent(NetClientEvent event){
+            this.setOnDisconnect(event::onDisconnect);
+            this.setOnRemoteDisconnect(event::onRemoteDisconnect);
+            this.setOnConnectFail(event::onConnectFail);
+            this.setOnConnect(event::onConnect);
+            this.setOnConnectFail(event::onConnectFail);
+            this.setOnAccept(event::onAccept);
         }
     }
 }

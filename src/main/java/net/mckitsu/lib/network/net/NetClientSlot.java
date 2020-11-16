@@ -8,7 +8,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 public abstract class NetClientSlot {
-    public final NetClientSlotEvent event;
+    public final Event event;
     public final int slotId;
     protected final Executor executor;
     private final Queue<byte[]> dataQueue;
@@ -24,7 +24,7 @@ public abstract class NetClientSlot {
         this.connect = false;
         this.dataQueue = new LinkedList<>();
         this.executor = executor;
-        this.event = new NetClientSlotEvent(executor);
+        this.event = new Event(executor);
     }
 
     protected void onReceiver(byte[] data){
@@ -37,16 +37,17 @@ public abstract class NetClientSlot {
     }
 
     public void close(){
-        if(this.close)
-            return;
-
-        this.close = true;
-        this.event.onClose();
+        basicClose();
     }
 
     protected void remoteClose(){
-        if(this.close)
+        basicClose();
+    }
+
+    protected void basicClose(){
+        if(this.close){
             return;
+        }
 
         this.close = true;
         this.event.onClose();
@@ -71,13 +72,13 @@ public abstract class NetClientSlot {
         return this.dataQueue.isEmpty();
     }
 
-    public class NetClientSlotEvent extends EventHandler{
+    public class Event extends EventHandler{
         private Consumer<NetClientSlot> onReceiver;
         private @Setter Consumer<NetClientSlot> onClose;
 
         private boolean onReceiverHandle;
 
-        private NetClientSlotEvent(Executor executor){
+        private Event(Executor executor){
             super(executor);
             this.onReceiverHandle = false;
         }
@@ -112,6 +113,11 @@ public abstract class NetClientSlot {
 
         private void onClose(){
             super.execute(this.onClose, NetClientSlot.this);
+        }
+
+        public void setEvent(NetClientSlotEvent event){
+            this.setOnReceiver(event::onReceiver);
+            this.setOnClose(event::onClose);
         }
     }
 }

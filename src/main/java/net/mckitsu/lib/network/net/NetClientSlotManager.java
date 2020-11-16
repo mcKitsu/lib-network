@@ -31,7 +31,7 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
             if(entry.getKey() == 0)
                 continue;
 
-            entry.getValue().remoteClose();
+                entry.getValue().basicClose();
         }
     }
 
@@ -134,7 +134,6 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
 
         NetClientSlot netClientSlot = construct(slotId);
         this.slotMap.put(slotId, netClientSlot);
-        System.out.println("onAllocSlot: SlotId = " + netClientSlot.slotId);
         if(this.onAlloc(netClientSlot)) {
             this.sendCommand(NetCommandSlot.Command.ACCEPT_SLOT, slotId);
         } else{
