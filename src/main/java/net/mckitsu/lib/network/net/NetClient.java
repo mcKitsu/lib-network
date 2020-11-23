@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
+import net.mckitsu.lib.util.EventHandler;
 
 public class NetClient extends NetChannel{
     public final Event event;

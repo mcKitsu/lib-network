@@ -6,7 +6,7 @@
 
     <groupId>net.mckitsu.lib</groupId>
     <artifactId>lib-network</artifactId>
-    <version>0.1</version>
+    <version>0.1.1</version>
     <url>http://www.kitsu.net</url>
     <build>
         <plugins>
@@ -34,6 +34,11 @@
             <artifactId>lombok</artifactId>
             <version>1.16.16</version>
             <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.mckitsu.lib</groupId>
+            <artifactId>lib-util</artifactId>
+            <version>0.1.1</version>
         </dependency>
     </dependencies>
 

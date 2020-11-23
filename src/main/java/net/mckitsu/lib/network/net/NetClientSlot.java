@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import net.mckitsu.lib.util.EventHandler;
 
 public abstract class NetClientSlot {
     public final Event event;
