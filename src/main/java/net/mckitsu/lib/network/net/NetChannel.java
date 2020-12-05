@@ -79,6 +79,7 @@ public abstract class NetChannel extends TcpClient {
             doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
             return false;
         }else {
+            this.verifyFinish = false;
             this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
             return super.connect(remoteAddress, identifier);
         }
@@ -89,6 +90,7 @@ public abstract class NetChannel extends TcpClient {
         if(super.isConnect()){
             doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
         }else{
+            this.verifyFinish = false;
             this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
             super.connect(remoteAddress, timeout, unit);
         }
@@ -99,6 +101,7 @@ public abstract class NetChannel extends TcpClient {
         if(super.isConnect()){
             doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
         }else{
+            this.verifyFinish = false;
             this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
             super.connect(remoteAddress, attachment, handler);
         }
@@ -115,6 +118,7 @@ public abstract class NetChannel extends TcpClient {
                     doExecutor(this::onRemoteDisconnect);
                     break;
             }
+
         }else{
             if(type == DisconnectType.REMOTE)
                 doExecutor(() -> this.onConnectFail(ConnectFailType.VERIFY_FAIL));
@@ -122,8 +126,7 @@ public abstract class NetChannel extends TcpClient {
     }
 
     @Override
-    protected void onConnect(int identifier){
-    }
+    protected void onConnect(int identifier){}
 
     @Override
     protected void onConnectFail(int identifier) {
@@ -203,8 +206,6 @@ public abstract class NetChannel extends TcpClient {
             case WAIT_AES_KEY_RESP:
                 if(Arrays.equals(EncryptAES.decrypt(data), this.aesKey)){
                     this.encryptSend(this.verifyKey, 0);
-                    //clear aes key
-                    this.aesKey = new byte[0];
                     return LifeCycle.WAIT_SUCCESS;
                 }
                 return LifeCycle.ERROR;
@@ -212,15 +213,11 @@ public abstract class NetChannel extends TcpClient {
             case WAIT_VERIFY_KEY:
                 if(Arrays.equals(EncryptAES.decrypt(data), this.verifyKey)){
                     this.encryptSend(this.verifyKey, 0);
-                    //clear verify key
-                    this.verifyKey = new byte[0];
                     return LifeCycle.SUCCESS;
                 }
                 return LifeCycle.ERROR;
             case WAIT_SUCCESS:
                 if(Arrays.equals(EncryptAES.decrypt(data), this.verifyKey)) {
-                    //clear verify key
-                    this.verifyKey = new byte[0];
                     return LifeCycle.SUCCESS;
                 }
             default:

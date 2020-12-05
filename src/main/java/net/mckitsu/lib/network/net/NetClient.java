@@ -143,11 +143,13 @@ public class NetClient extends NetChannel{
      *  Class Event
      */
     public static class Event extends EventHandler{
+
         private @Setter Runnable onDisconnect;
         private @Setter Runnable onRemoteDisconnect;
         private @Setter Runnable onConnectFail;
         private @Setter Consumer<NetClient> onConnect;
         private @Setter Consumer<NetClientSlot> onAccept;
+
 
         private Event(Executor executor){
             super(executor);
