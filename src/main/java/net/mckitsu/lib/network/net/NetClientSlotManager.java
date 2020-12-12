@@ -1,7 +1,7 @@
 package net.mckitsu.lib.network.net;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 public abstract class NetClientSlotManager extends NetCommandSlot {
@@ -12,7 +12,7 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
 
     protected NetClientSlotManager(Executor executor){
         super(executor);
-        this.slotMap = new HashMap<>();
+        this.slotMap = new ConcurrentHashMap<>();
         this.slotMap.put(0, this);
     }
 
