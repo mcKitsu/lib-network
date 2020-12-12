@@ -104,16 +104,6 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
             }
 
             @Override
-            protected void remoteClose(){
-                if(isClose())
-                    return;
-
-                if(slotMap.remove(slotId, this)){
-                    super.remoteClose();
-                }
-            }
-
-            @Override
             public void send(byte[] data) {
                 if(this.isClose())
                     return;
@@ -147,7 +137,7 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
         if(netClientSlot != null) {
             netClientSlot.onConnect();
             synchronized (netClientSlot){
-                netClientSlot.notifyAll();
+                netClientSlot.notify();
             }
         }
     }
@@ -157,7 +147,7 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
         if(netClientSlot != null) {
             netClientSlot.remoteClose();
             synchronized (netClientSlot){
-                netClientSlot.notifyAll();
+                netClientSlot.notify();
             }
         }
     }
