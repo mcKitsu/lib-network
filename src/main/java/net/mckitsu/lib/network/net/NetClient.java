@@ -86,6 +86,15 @@ public class NetClient extends NetChannel{
      *  Public method
      */
 
+    public int alloc(){
+        int result = 0;
+        if(!isConnect())
+            return 0;
+
+        result = this.slotManager.alloc().slotId;
+        return result;
+    }
+
     public NetClientSlot openSlot(){
         if(!isConnect())
             return null;
@@ -128,8 +137,15 @@ public class NetClient extends NetChannel{
 
             @Override
             protected boolean onAlloc(NetClientSlot netClientSlot) {
+                if(NetClient.this.event.onAlloc == null)
+                    return false;
 
+                NetClient.this.event.onAlloc(netClientSlot);
+                return true;
+            }
 
+            @Override
+            protected boolean onAccept(NetClientSlot netClientSlot) {
                 if(NetClient.this.event.onAccept == null)
                     return false;
 
@@ -143,18 +159,35 @@ public class NetClient extends NetChannel{
      *  Class Event
      */
     public static class Event extends EventHandler{
-
         private @Setter Runnable onDisconnect;
         private @Setter Runnable onRemoteDisconnect;
         private @Setter Runnable onConnectFail;
         private @Setter Consumer<NetClient> onConnect;
         private @Setter Consumer<NetClientSlot> onAccept;
+        private @Setter Consumer<NetClientSlot> onAlloc;
 
-
+        /* **************************************************************************************
+         *  construct Event.method
+         */
         private Event(Executor executor){
             super(executor);
         }
 
+        /* **************************************************************************************
+         *  public Event.method
+         */
+        public void setEvent(NetClientEvent event){
+            this.setOnDisconnect(event::onDisconnect);
+            this.setOnRemoteDisconnect(event::onRemoteDisconnect);
+            this.setOnConnectFail(event::onConnectFail);
+            this.setOnConnect(event::onConnect);
+            this.setOnConnectFail(event::onConnectFail);
+            this.setOnAccept(event::onAccept);
+        }
+
+        /* **************************************************************************************
+         *  protected Event.method
+         */
         protected boolean onDisconnect(){
             return super.execute(this.onDisconnect);
         }
@@ -175,13 +208,12 @@ public class NetClient extends NetChannel{
             return execute(this.onAccept, netClientSlot);
         }
 
-        public void setEvent(NetClientEvent event){
-            this.setOnDisconnect(event::onDisconnect);
-            this.setOnRemoteDisconnect(event::onRemoteDisconnect);
-            this.setOnConnectFail(event::onConnectFail);
-            this.setOnConnect(event::onConnect);
-            this.setOnConnectFail(event::onConnectFail);
-            this.setOnAccept(event::onAccept);
+        protected boolean onAlloc(NetClientSlot netClientSlot){
+            return execute(this.onAlloc, netClientSlot);
         }
+
+        /* **************************************************************************************
+         *  private Event.method
+         */
     }
 }

@@ -10,4 +10,6 @@ public interface NetClientEvent {
     void onConnect(NetClient netClient);
 
     void onAccept(NetClientSlot netClientSlot);
+
+    void onAlloc(NetClientSlot netClientSlot);
 }

@@ -9,6 +9,8 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
 
     protected abstract void send(byte[] data, int identifier);
     protected abstract boolean onAlloc(NetClientSlot netClientSlot);
+    protected abstract boolean onAccept(NetClientSlot netClientSlot);
+
 
     protected NetClientSlotManager(Executor executor){
         super(executor);
@@ -36,12 +38,13 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
     }
 
     @Override
-    public void send(byte[] data) {
+    public boolean send(byte[] data) {
         if(this.isClose())
-            return;
+            return false;
 
         NetClientPacket packet = new NetClientPacket(this.slotId, data);
         NetClientSlotManager.this.send(packet.sourceData, this.slotId);
+        return true;
     }
 
     @Override
@@ -104,12 +107,14 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
             }
 
             @Override
-            public void send(byte[] data) {
-                if(this.isClose())
-                    return;
+            public boolean send(byte[] data) {
+                if(!super.send(data))
+                    return false;
 
                 NetClientPacket packet = new NetClientPacket(this.slotId, data);
                 NetClientSlotManager.this.send(packet.sourceData, this.slotId);
+
+                return true;
             }
         };
     }
@@ -136,8 +141,10 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
         NetClientSlot netClientSlot = this.slotMap.get(slotId);
         if(netClientSlot != null) {
             netClientSlot.onConnect();
-            synchronized (netClientSlot){
-                netClientSlot.notify();
+
+            if(!this.onAccept(netClientSlot)) {
+                this.sendCommand(NetCommandSlot.Command.CLOSE_SLOT, slotId);
+                this.slotMap.remove(slotId, netClientSlot);
             }
         }
     }
