@@ -129,11 +129,11 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
 
         NetClientSlot netClientSlot = construct(slotId);
         this.slotMap.put(slotId, netClientSlot);
-        if(this.onAlloc(netClientSlot)) {
-            this.sendCommand(NetCommandSlot.Command.ACCEPT_SLOT, slotId);
+        if(this.onAccept(netClientSlot)) {
+            this.sendCommand(Command.ACCEPT_SLOT, slotId);
         } else{
             this.slotMap.remove(slotId, netClientSlot);
-            this.sendCommand(NetCommandSlot.Command.CLOSE_SLOT, slotId);
+            this.sendCommand(Command.CLOSE_SLOT, slotId);
         }
     }
 
@@ -142,8 +142,8 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
         if(netClientSlot != null) {
             netClientSlot.onConnect();
 
-            if(!this.onAccept(netClientSlot)) {
-                this.sendCommand(NetCommandSlot.Command.CLOSE_SLOT, slotId);
+            if(!this.onAlloc(netClientSlot)) {
+                this.sendCommand(Command.CLOSE_SLOT, slotId);
                 this.slotMap.remove(slotId, netClientSlot);
             }
         }
@@ -151,12 +151,6 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
 
     private void onCloseSlot(int slotId){
         NetClientSlot netClientSlot = this.slotMap.remove(slotId);
-        if(netClientSlot != null) {
-            netClientSlot.remoteClose();
-            synchronized (netClientSlot){
-                netClientSlot.notify();
-            }
-        }
     }
 
     private void onUnknownSlot(int slotId){

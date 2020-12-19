@@ -1,4 +1,6 @@
-package net.mckitsu.lib.network.net;
+package net.mckitsu.lib.network.net.event;
+
+import net.mckitsu.lib.network.net.NetClientSlot;
 
 public interface NetClientSlotEvent {
 

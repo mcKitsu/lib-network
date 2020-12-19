@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
-public abstract class NetCommandSlot extends NetClientSlot{
+public abstract class NetCommandSlot extends NetClientSlot {
     protected abstract void onCommand(Command command, int slotId);
 
     protected NetCommandSlot(Executor executor) {

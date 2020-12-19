@@ -1,15 +1,16 @@
 package net.mckitsu.lib.network.net;
 
 import lombok.Setter;
+import net.mckitsu.lib.network.net.event.NetClientEvent;
 import net.mckitsu.lib.network.tcp.TcpChannel;
+import net.mckitsu.lib.util.EventHandler;
 
 import java.io.IOException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
-import net.mckitsu.lib.util.EventHandler;
 
-public class NetClient extends NetChannel{
+public class NetClient extends NetChannel {
     public final Event event;
 
     private final NetClientSlotManager slotManager;
@@ -86,33 +87,11 @@ public class NetClient extends NetChannel{
      *  Public method
      */
 
-    public int alloc(){
-        int result = 0;
-        if(!isConnect())
-            return 0;
-
-        result = this.slotManager.alloc().slotId;
-        return result;
-    }
-
-    public NetClientSlot openSlot(){
+    public NetClientSlot alloc(){
         if(!isConnect())
             return null;
 
-        NetClientSlot result;
-        result = this.slotManager.alloc();
-        synchronized (result){
-            while(true){
-                try {
-                    result.wait();
-                    if(result.isConnect() | result.isClose())
-                        break;
-                } catch (InterruptedException e) {
-                    break;
-                }
-            }
-        }
-        return result;
+        return this.slotManager.alloc();
     }
     /* **************************************************************************************
      *  Private method
@@ -183,6 +162,7 @@ public class NetClient extends NetChannel{
             this.setOnConnect(event::onConnect);
             this.setOnConnectFail(event::onConnectFail);
             this.setOnAccept(event::onAccept);
+            this.setOnAlloc(event::onAlloc);
         }
 
         /* **************************************************************************************

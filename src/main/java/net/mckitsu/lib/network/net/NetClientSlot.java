@@ -1,5 +1,6 @@
 package net.mckitsu.lib.network.net;
 
+import net.mckitsu.lib.network.net.event.NetClientSlotEvent;
 import net.mckitsu.lib.util.EventHandler;
 
 import java.util.LinkedList;
