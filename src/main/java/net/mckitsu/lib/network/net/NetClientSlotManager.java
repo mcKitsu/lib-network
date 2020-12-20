@@ -128,6 +128,7 @@ public abstract class NetClientSlotManager extends NetCommandSlot {
             this.sendCommand(Command.CLOSE_SLOT, slotId);
 
         NetClientSlot netClientSlot = construct(slotId);
+        netClientSlot.onConnect();
         this.slotMap.put(slotId, netClientSlot);
         if(this.onAccept(netClientSlot)) {
             this.sendCommand(Command.ACCEPT_SLOT, slotId);
