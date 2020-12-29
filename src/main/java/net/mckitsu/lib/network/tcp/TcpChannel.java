@@ -13,6 +13,14 @@ import java.util.concurrent.TimeoutException;
 public class TcpChannel {
     protected AsynchronousSocketChannel channel;
 
+    /* **************************************************************************************
+     *  Abstract method
+     */
+
+    /* **************************************************************************************
+     *  Construct method
+     */
+
     protected TcpChannel(AsynchronousSocketChannel channel){
         if(channel == null)
             throw new NullPointerException();
@@ -20,9 +28,20 @@ public class TcpChannel {
         this.channel = channel;
     }
 
+    /* **************************************************************************************
+     *  Static method
+     */
+
     public static TcpChannel open() throws IOException {
         return new TcpChannel(AsynchronousSocketChannel.open());
     }
+    /* **************************************************************************************
+     *  Override method
+     */
+
+    /* **************************************************************************************
+     *  Public method
+     */
 
     public void connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit) throws IOException{
         if(this.isConnect())
@@ -103,4 +122,12 @@ public class TcpChannel {
             return null;
         }
     }
+
+    /* **************************************************************************************
+     *  protected method
+     */
+
+    /* **************************************************************************************
+     *  Private method
+     */
 }

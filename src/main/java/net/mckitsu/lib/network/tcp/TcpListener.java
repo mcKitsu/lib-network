@@ -15,10 +15,13 @@ import java.util.concurrent.ExecutorService;
  * @author  ZxyKira
  */
 public abstract class TcpListener {
-    protected abstract ExecutorService getExecutorService();
-
     protected AsynchronousServerSocketChannel serverChannel;
     private final CompletionHandlerEvent completionHandlerEvent;
+
+    /* **************************************************************************************
+     *  Abstract method
+     */
+    protected abstract Executor getExecutor();
 
     /**
      * 服務端啟動失敗後調用此方法
@@ -34,11 +37,15 @@ public abstract class TcpListener {
      */
     public abstract void onAccept(TcpChannel tcpChannel);
 
+    /* **************************************************************************************
+     *  Construct method
+     */
+
     public TcpListener() {
         this.completionHandlerEvent = new CompletionHandlerEvent() {
             @Override
             protected Executor getExecutor() {
-                return TcpListener.this.getExecutorService();
+                return TcpListener.this.getExecutor();
             }
 
             @Override
@@ -57,6 +64,14 @@ public abstract class TcpListener {
             }
         };
     }
+
+    /* **************************************************************************************
+     *  Override method
+     */
+
+    /* **************************************************************************************
+     *  Public method
+     */
 
     public boolean isStart(){
         try {
@@ -106,11 +121,19 @@ public abstract class TcpListener {
         }
     }
 
+    /* **************************************************************************************
+     *  protected method
+     */
+
     protected void accept(){
         try{
             serverChannel.accept(null, this.completionHandlerEvent);
         } catch (NullPointerException ignore){}
     }
+
+    /* **************************************************************************************
+     *  Class CompletionHandlerEvent
+     */
 
     private static abstract class CompletionHandlerEvent implements CompletionHandler<AsynchronousSocketChannel, Object>{
         protected abstract Executor getExecutor();
