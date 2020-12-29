@@ -2,8 +2,8 @@ package net.mckitsu.lib.network.net;
 
 import net.mckitsu.lib.network.tcp.TcpChannel;
 import net.mckitsu.lib.network.tcp.TcpClient;
-import net.mckitsu.lib.util.AES;
-import net.mckitsu.lib.util.RSA;
+import net.mckitsu.lib.util.encrypt.AES;
+import net.mckitsu.lib.util.encrypt.RSA;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;

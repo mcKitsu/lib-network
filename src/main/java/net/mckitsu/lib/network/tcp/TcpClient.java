@@ -20,6 +20,9 @@ public abstract class TcpClient extends TcpChannel{
     private final Queue<DataPacket> sendQueue;
     private boolean isTransfer;
 
+    /* **************************************************************************************
+     *  Abstract method
+     */
     protected abstract Executor getExecutor();
 
     /**
@@ -58,6 +61,9 @@ public abstract class TcpClient extends TcpChannel{
      */
     protected abstract void onTransfer(byte[] data, int identifier);
 
+    /* **************************************************************************************
+     *  Construct method
+     */
     public TcpClient() throws IOException {
         super(AsynchronousSocketChannel.open());
         this.completionHandlerEvent = new CompletionHandlerEvent();
@@ -87,31 +93,12 @@ public abstract class TcpClient extends TcpChannel{
      * @param tcpChannel TcpChannel
      */
     public TcpClient(TcpChannel tcpChannel){
-        this(tcpChannel.channel);}
-
-    public boolean connect(InetSocketAddress remoteAddress, int identifier){
-        try {
-            if(!super.channel.isOpen())
-                super.channel = AsynchronousSocketChannel.open();
-
-            super.connect(remoteAddress, identifier, new CompletionHandler<Void, Integer>() {
-                @Override
-                public void completed(Void result, Integer attachment) {
-                    beginReceiver();
-                    TcpClient.this.doExecutor(() -> TcpClient.this.onConnect(identifier));
-                }
-
-                @Override
-                public void failed(Throwable exc, Integer attachment) {
-                    TcpClient.this.doExecutor(() -> TcpClient.this.onConnectFail(0));
-                }
-            });
-
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        this(tcpChannel.channel);
     }
+
+    /* **************************************************************************************
+     *  Override method
+     */
 
     @Override
     public void connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit){
@@ -159,6 +146,34 @@ public abstract class TcpClient extends TcpChannel{
         return result;
     }
 
+    /* **************************************************************************************
+     *  Public method
+     */
+
+    public boolean connect(InetSocketAddress remoteAddress, int identifier){
+        try {
+            if(!super.channel.isOpen())
+                super.channel = AsynchronousSocketChannel.open();
+
+            super.connect(remoteAddress, identifier, new CompletionHandler<Void, Integer>() {
+                @Override
+                public void completed(Void result, Integer attachment) {
+                    beginReceiver();
+                    TcpClient.this.doExecutor(() -> TcpClient.this.onConnect(identifier));
+                }
+
+                @Override
+                public void failed(Throwable exc, Integer attachment) {
+                    TcpClient.this.doExecutor(() -> TcpClient.this.onConnectFail(0));
+                }
+            });
+
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
     /**
      * 發送資料至遠端.
      * <p>發送成功時回調TcpClientEvent.onTransfer(this, identifier)
@@ -172,6 +187,46 @@ public abstract class TcpClient extends TcpChannel{
             this.beginTransfer();
     }
 
+
+    /* **************************************************************************************
+     *  protected method
+     */
+    protected void beginTransfer(){
+        if(!isConnect())
+            return;
+
+        if(sendQueue.size() !=0){
+            isTransfer = true;
+            DataPacket dataPacket = sendQueue.poll();
+            ByteBuffer buffer = ByteBuffer.wrap(dataPacket.data);
+            channel.write(buffer,
+                    new SocketHandle(SocketHandle.SocketEvent.TRANSFER, buffer, dataPacket.identifier),
+                    this.completionHandlerEvent);
+        }else{
+            isTransfer = false;
+        }
+    }
+
+    protected void beginReceiver(){
+        if(!isConnect())
+            return;
+
+        ByteBuffer buffer = ByteBuffer.allocate(16384);
+        channel.read(buffer,
+                new SocketHandle(SocketHandle.SocketEvent.RECEIVER, buffer),
+                this.completionHandlerEvent);
+    }
+
+    protected void doExecutor(Runnable command){
+        if(this.getExecutor() != null)
+            this.getExecutor().execute(command);
+        else
+            command.run();
+    }
+
+    /* **************************************************************************************
+     *  Private method
+     */
     private void eventSwitch(SocketHandle socketHandle){
 
         byte[] data = new byte[0];
@@ -201,43 +256,9 @@ public abstract class TcpClient extends TcpChannel{
         this.doExecutor(() -> this.eventSwitch(socketHandle));
     }
 
-    protected void beginTransfer(){
-        if(!isConnect())
-            return;
-
-        if(sendQueue.size() !=0){
-            isTransfer = true;
-            DataPacket dataPacket = sendQueue.poll();
-            ByteBuffer buffer = ByteBuffer.wrap(dataPacket.data);
-            channel.write(buffer,
-                    new SocketHandle(SocketHandle.SocketEvent.TRANSFER, buffer, dataPacket.identifier),
-                    this.completionHandlerEvent);
-        }else{
-            isTransfer = false;
-        }
-    }
-
-    protected void beginReceiver(){
-        if(!isConnect())
-            return;
-
-        ByteBuffer buffer = ByteBuffer.allocate(16384);
-        channel.read(buffer,
-                new SocketHandle(SocketHandle.SocketEvent.RECEIVER, buffer),
-                this.completionHandlerEvent);
-    }
-
-    public enum DisconnectType{
-        INITIATIVE,
-        REMOTE
-    }
-
-    protected void doExecutor(Runnable command){
-        if(this.getExecutor() != null)
-            this.getExecutor().execute(command);
-        else
-            command.run();
-    }
+    /* **************************************************************************************
+     *  Class CompletionHandlerEvent
+     */
 
     private class CompletionHandlerEvent implements CompletionHandler<Integer, SocketHandle>{
 
@@ -264,6 +285,10 @@ public abstract class TcpClient extends TcpChannel{
             TcpClient.this.disconnect(DisconnectType.REMOTE);
         }
     }
+
+    /* **************************************************************************************
+     *  Class SocketHandle
+     */
 
     private static class SocketHandle{
         protected final SocketEvent socketEvent;
@@ -298,6 +323,10 @@ public abstract class TcpClient extends TcpChannel{
         }
     }
 
+    /* **************************************************************************************
+     *  Class DataPacket
+     */
+
     private static class DataPacket{
         public final byte[] data;
         public final int identifier;
@@ -307,4 +336,13 @@ public abstract class TcpClient extends TcpChannel{
             this.identifier = identifier;
         }
     }
+
+    /* **************************************************************************************
+     *  Enum DisconnectType
+     */
+    public enum DisconnectType{
+        INITIATIVE,
+        REMOTE
+    }
+
 }

@@ -4,6 +4,7 @@ import lombok.Setter;
 import net.mckitsu.lib.network.net.event.NetClientEvent;
 import net.mckitsu.lib.network.tcp.TcpChannel;
 import net.mckitsu.lib.util.EventHandler;
+import net.mckitsu.lib.util.EventHandlers;
 
 import java.io.IOException;
 import java.util.concurrent.Executor;
@@ -137,7 +138,9 @@ public class NetClient extends NetChannel {
     /* **************************************************************************************
      *  Class Event
      */
-    public static class Event extends EventHandler{
+    public static class Event{
+        private final EventHandler eventHandler;
+
         private @Setter Runnable onDisconnect;
         private @Setter Runnable onRemoteDisconnect;
         private @Setter Runnable onConnectFail;
@@ -149,7 +152,7 @@ public class NetClient extends NetChannel {
          *  construct Event.method
          */
         private Event(Executor executor){
-            super(executor);
+            this.eventHandler = EventHandlers.newExecuteEventHandler(executor);
         }
 
         /* **************************************************************************************
@@ -169,27 +172,27 @@ public class NetClient extends NetChannel {
          *  protected Event.method
          */
         protected boolean onDisconnect(){
-            return super.execute(this.onDisconnect);
+            return this.eventHandler.execute(this.onDisconnect);
         }
 
         protected boolean onRemoteDisconnect(){
-            return super.execute(this.onRemoteDisconnect);
+            return this.eventHandler.execute(this.onRemoteDisconnect);
         }
 
         protected boolean onConnectFail(){
-            return super.execute(this.onConnectFail);
+            return this.eventHandler.execute(this.onConnectFail);
         }
 
         protected boolean onConnect(NetClient netClient){
-            return super.execute(this.onConnect, netClient);
+            return this.eventHandler.execute(this.onConnect, netClient);
         }
 
         protected boolean onAccept(NetClientSlot netClientSlot){
-            return execute(this.onAccept, netClientSlot);
+            return this.eventHandler.execute(this.onAccept, netClientSlot);
         }
 
         protected boolean onAlloc(NetClientSlot netClientSlot){
-            return execute(this.onAlloc, netClientSlot);
+            return this.eventHandler.execute(this.onAlloc, netClientSlot);
         }
 
         /* **************************************************************************************

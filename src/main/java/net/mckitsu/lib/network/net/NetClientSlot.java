@@ -2,6 +2,7 @@ package net.mckitsu.lib.network.net;
 
 import net.mckitsu.lib.network.net.event.NetClientSlotEvent;
 import net.mckitsu.lib.util.EventHandler;
+import net.mckitsu.lib.util.EventHandlers;
 
 import java.util.LinkedList;
 import java.util.Queue;
@@ -100,7 +101,8 @@ public abstract class NetClientSlot {
     /* **************************************************************************************
      *  Class Event
      */
-    public class Event extends EventHandler{
+    public class Event{
+        private final EventHandler eventHandler;
         private Consumer<NetClientSlot> onReceiver;
         private Consumer<NetClientSlot> onClose;
 
@@ -109,7 +111,7 @@ public abstract class NetClientSlot {
          *  Construct Event.method
          */
         private Event(Executor executor){
-            super(executor);
+            this.eventHandler = EventHandlers.newExecuteEventHandler(executor);
             this.onReceiverHandle = false;
         }
         /* **************************************************************************************
@@ -154,14 +156,14 @@ public abstract class NetClientSlot {
             };
 
 
-            boolean executeResult = super.execute(this.onReceiver, NetClientSlot.this, callback);
+            boolean executeResult = this.eventHandler.execute(this.onReceiver, NetClientSlot.this, callback);
 
             if(!executeResult)
                 onReceiverHandle = false;
         }
 
         private void onClose(){
-            super.execute(this.onClose, NetClientSlot.this);
+            this.eventHandler.execute(this.onClose, NetClientSlot.this);
         }
     }
 
