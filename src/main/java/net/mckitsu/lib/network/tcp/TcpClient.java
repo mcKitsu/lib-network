@@ -104,7 +104,7 @@ public abstract class TcpClient extends TcpChannel{
         super.channel = channel;
 
         if(this.isConnect()){
-            this.eventHandler.execute(this::onConnect);
+            this.eventHandler.executeRunnable(this::onConnect);
             beginReceiver();
         }
     }
@@ -136,7 +136,7 @@ public abstract class TcpClient extends TcpChannel{
             beginReceiver();
             this.onConnect();
         } catch (IOException e) {
-            this.eventHandler.execute(this::onConnectFail);
+            this.eventHandler.executeRunnable(this::onConnectFail);
             return false;
         }
         return true;
@@ -152,7 +152,7 @@ public abstract class TcpClient extends TcpChannel{
             beginReceiver();
             this.onConnect();
         } catch (IOException e) {
-            this.eventHandler.execute(this::onConnectFail);
+            this.eventHandler.executeRunnable(this::onConnectFail);
             return false;
         }
 
@@ -167,7 +167,7 @@ public abstract class TcpClient extends TcpChannel{
     public boolean disconnect(){
         boolean result = super.disconnect();
         if(result)
-            this.eventHandler.execute(this::onDisconnect);
+            this.eventHandler.executeRunnable(this::onDisconnect);
 
         return result;
     }
@@ -237,33 +237,33 @@ public abstract class TcpClient extends TcpChannel{
     }
 
     private void handleConnectFail(Throwable exc, Object attachment){
-        this.eventHandler.execute(this::onConnectFail);
+        this.eventHandler.executeRunnable(this::onConnectFail);
     }
 
     private void handleReceiver(Integer result, ByteBuffer attachment){
         if(result != -1){
             this.beginReceiver();
-            this.eventHandler.execute(this::executeReceiver, attachment);
+            this.eventHandler.executeConsumer(this::executeReceiver, attachment);
         }else {
-            this.eventHandler.execute(this::onRemoteDisconnect);
+            this.eventHandler.executeRunnable(this::onRemoteDisconnect);
         }
     }
 
     private void handleReceiverFail(Throwable exc, ByteBuffer attachment){
-        this.eventHandler.execute(this::onRemoteDisconnect);
+        this.eventHandler.executeRunnable(this::onRemoteDisconnect);
     }
 
     private void handleTransfer(Integer result, DataPacket attachment){
         if(result != -1){
             this.beginTransfer();
-            this.eventHandler.execute(this::executeTransfer, attachment);
+            this.eventHandler.executeConsumer(this::executeTransfer, attachment);
         }else{
-            this.eventHandler.execute(this::onRemoteDisconnect);
+            this.eventHandler.executeRunnable(this::onRemoteDisconnect);
         }
     }
 
     private void handleTransferFail(Throwable exc, DataPacket attachment){
-        this.eventHandler.execute(this::onRemoteDisconnect);
+        this.eventHandler.executeRunnable(this::onRemoteDisconnect);
     }
 
     private void executeReceiver(ByteBuffer byteBuffer){
