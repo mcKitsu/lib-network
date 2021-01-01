@@ -6,7 +6,7 @@
 
     <groupId>net.mckitsu.lib</groupId>
     <artifactId>lib-network</artifactId>
-    <version>0.1.6</version>
+    <version>0.1.7</version>
     <url>http://www.kitsu.net</url>
     <build>
         <plugins>
@@ -38,7 +38,7 @@
         <dependency>
             <groupId>net.mckitsu.lib</groupId>
             <artifactId>lib-util</artifactId>
-            <version>0.1.7</version>
+            <version>0.1.8</version>
         </dependency>
     </dependencies>
 
