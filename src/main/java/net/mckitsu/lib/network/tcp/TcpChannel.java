@@ -21,10 +21,11 @@ public class TcpChannel {
      *  Construct method
      */
 
-    protected TcpChannel(AsynchronousSocketChannel channel){
-        if(channel == null)
-            throw new NullPointerException();
+    public TcpChannel(){
+        this.channel = null;
+    }
 
+    public TcpChannel(AsynchronousSocketChannel channel){
         this.channel = channel;
     }
 
@@ -32,9 +33,6 @@ public class TcpChannel {
      *  Static method
      */
 
-    public static TcpChannel open() throws IOException {
-        return new TcpChannel(AsynchronousSocketChannel.open());
-    }
     /* **************************************************************************************
      *  Override method
      */
@@ -43,9 +41,12 @@ public class TcpChannel {
      *  Public method
      */
 
-    public void connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit) throws IOException{
+    public boolean connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit) throws IOException{
+        if(this.channel == null)
+            this.channel = AsynchronousSocketChannel.open();
+
         if(this.isConnect())
-            throw new IOException("Already connect to remote.");
+            return false;
 
         if(!this.channel.isOpen())
             this.channel = AsynchronousSocketChannel.open();
@@ -57,16 +58,21 @@ public class TcpChannel {
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new IOException("Connect Fail " + remoteAddress);
         }
+        return true;
     }
 
-    public void connect(InetSocketAddress remoteAddress, int attachment, CompletionHandler<Void,Integer> handler) throws IOException {
+    public <A> boolean connect(InetSocketAddress remoteAddress, A attachment, CompletionHandler<Void, ? super A> handler) throws IOException {
+        if(this.channel == null)
+            this.channel = AsynchronousSocketChannel.open();
+
         if(this.isConnect())
-            throw new IOException("Already connect to remote.");
+            return false;
 
         if(!this.channel.isOpen())
             this.channel = AsynchronousSocketChannel.open();
 
-        channel.connect(remoteAddress, attachment, handler);
+        this.channel.connect(remoteAddress, attachment, handler);
+        return true;
     }
 
     /**
@@ -74,6 +80,9 @@ public class TcpChannel {
      *
      */
     public boolean disconnect(){
+        if(this.channel == null)
+            return false;
+
         if(this.channel.isOpen()) {
             try {
                 this.channel.close();
