@@ -1,17 +1,15 @@
 package net.mckitsu.lib.network.tcp;
 
-import net.mckitsu.lib.util.EventHandler;
 import net.mckitsu.lib.util.pool.BufferPools;
 import net.mckitsu.lib.util.pool.ByteBufferPool;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
+import java.time.Instant;
 import java.util.LinkedList;
 import java.util.Queue;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
@@ -25,16 +23,23 @@ public abstract class TcpClient extends TcpChannel{
     private final CompletionHandlerEvent<Void, Object> chEventConnect;
     private final CompletionHandlerEvent<Integer, ByteBuffer> chEventReceiver;
     private final CompletionHandlerEvent<Integer, DataPacket> chEventTransfer;
-    private final ByteBufferPool byteBufferPool;
-
-    protected final EventHandler eventHandler;
+    private ByteBufferPool byteBufferPool;
 
     private boolean isTransfer;
+    private boolean isOnRemoteDisconnect;
+
+    private long statusTransferCount = 0;
+    private long statusReceiverCount = 0;
+    private long statusTransferSize = 0;
+    private long statusReceiverSize = 0;
+    private long statusConnectedTime = 0;
+    private int maximumTransmissionUnit = 0;
+
 
     /* **************************************************************************************
      *  Abstract method
      */
-    protected abstract Executor getExecutor();
+
 
     /**
      * 成功與遠端建立連線後調用此方法.
@@ -75,51 +80,40 @@ public abstract class TcpClient extends TcpChannel{
      */
     protected abstract void onTransfer(byte[] data, int identifier);
 
+    protected abstract void onReceiverMtu(int maximumTransmissionUnit);
+
     /* **************************************************************************************
      *  Construct method
      */
-    public TcpClient(int bufferSize){
-        this.eventHandler = constructEventHandler();
-        this.sendQueue = new LinkedList<>();
-        this.isTransfer = false;
-
+    private TcpClient(){
         this.chEventConnect = new CompletionHandlerEvent<>(this::handleConnect, this::handleConnectFail);
         this.chEventReceiver = new CompletionHandlerEvent<>(this::handleReceiver, this::handleReceiverFail);
         this.chEventTransfer = new CompletionHandlerEvent<>(this::handleTransfer, this::handleTransferFail);
-
-        this.byteBufferPool = BufferPools.newCacheBufferPool(bufferSize, 64);
+        this.isTransfer = false;
+        this.isOnRemoteDisconnect = false;
+        this.sendQueue = new LinkedList<>();
     }
 
-    public TcpClient(AsynchronousSocketChannel channel){
-        this(channel, 16384);
+    public TcpClient(int maximumTransmissionUnit){
+        this();
+        this.maximumTransmissionUnit = maximumTransmissionUnit;
+        this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
     }
 
     /**
      * 建構子.
      *
-     * @param channel AsynchronousSocketChannel
+     * @param tcpChannel AsynchronousSocketChannel
      */
-    public TcpClient(AsynchronousSocketChannel channel, int bufferSize){
-        this(bufferSize);
-        super.channel = channel;
+    public TcpClient(TcpChannel tcpChannel) throws IOException {
+        this();
+        super.channel = tcpChannel.channel;
 
         if(this.isConnect()){
-            this.eventHandler.executeRunnable(this::onConnect);
-            beginReceiver();
+            this.receiverMtu();
+        }else{
+            throw new IOException("channel not connected");
         }
-    }
-
-    /**
-     * 建構子.
-     *
-     * @param tcpChannel TcpChannel
-     */
-    public TcpClient(TcpChannel tcpChannel){
-        this(tcpChannel.channel);
-    }
-
-    public TcpClient(TcpChannel tcpChannel, int bufferSize){
-        this(tcpChannel.channel, bufferSize);
     }
 
     /* **************************************************************************************
@@ -133,10 +127,9 @@ public abstract class TcpClient extends TcpChannel{
             if(!result)
                 return false;
 
-            beginReceiver();
-            this.onConnect();
+            this.handleConnect(null, null);
         } catch (IOException e) {
-            this.eventHandler.executeRunnable(this::onConnectFail);
+            this.onConnectFail();
             return false;
         }
         return true;
@@ -144,15 +137,27 @@ public abstract class TcpClient extends TcpChannel{
 
     @Override
     public <A> boolean connect(InetSocketAddress remoteAddress, A attachment, CompletionHandler<Void,? super A> handler){
+
+        CompletionHandler<Void,? super A> handlerOv = new CompletionHandler<Void, A>() {
+            @Override
+            public void completed(Void result, A attachment) {
+                TcpClient.this.handleConnect(result, attachment);
+                handler.completed(result, attachment);
+            }
+
+            @Override
+            public void failed(Throwable exc, A attachment) {
+                handler.failed(exc, attachment);
+            }
+        };
+
         try {
-            boolean result = super.connect(remoteAddress, attachment, handler);
+            boolean result = super.connect(remoteAddress, attachment, handlerOv);
             if(!result)
                 return false;
 
-            beginReceiver();
-            this.onConnect();
         } catch (IOException e) {
-            this.eventHandler.executeRunnable(this::onConnectFail);
+            this.onConnectFail();
             return false;
         }
 
@@ -167,7 +172,7 @@ public abstract class TcpClient extends TcpChannel{
     public boolean disconnect(){
         boolean result = super.disconnect();
         if(result)
-            this.eventHandler.executeRunnable(this::onDisconnect);
+            this.onDisconnect();
 
         return result;
     }
@@ -178,8 +183,8 @@ public abstract class TcpClient extends TcpChannel{
 
     public boolean connect(InetSocketAddress remoteAddress){
         try {
-            if(!super.channel.isOpen())
-                super.channel = AsynchronousSocketChannel.open();
+            if(!super.isOpen())
+                super.channelOpen();
 
             super.connect(remoteAddress, new Object(), this.chEventConnect);
 
@@ -196,10 +201,39 @@ public abstract class TcpClient extends TcpChannel{
      * @param  data 預發送資料來源.
      * @param  identifier 識別碼.
      */
-    public synchronized void send(byte[] data, int identifier){
+    public synchronized boolean send(byte[] data, int identifier){
+        if(data.length > maximumTransmissionUnit)
+            return false;
+
         sendQueue.add(new DataPacket(data, identifier));
         if(!isTransfer)
             this.beginTransfer();
+
+        return true;
+    }
+
+    public long getStatusTransferCount(){
+        return this.statusTransferCount;
+    }
+
+    public long getStatusReceiverCount(){
+        return this.statusReceiverCount;
+    }
+
+    public long getStatusTransferSize(){
+        return this.statusTransferSize;
+    }
+
+    public long getStatusReceiverSize() {
+        return statusReceiverSize;
+    }
+
+    public long getStatusConnectedTime(){
+        return statusConnectedTime;
+    }
+
+    public int getMaximumTransmissionUnit(){
+        return this.maximumTransmissionUnit;
     }
 
     /* **************************************************************************************
@@ -227,43 +261,93 @@ public abstract class TcpClient extends TcpChannel{
         channel.read(buffer, buffer, this.chEventReceiver);
     }
 
+    protected void transferMtu(){
+        this.directSend(ByteBuffer.allocate(4).putInt(TcpClient.this.maximumTransmissionUnit).array(), 0);
+    }
+
+    protected void receiverMtu(){
+        if(!isConnect())
+            return;
+
+        CompletionHandlerEvent<Integer, ByteBuffer> chEventReceiverMtu = new CompletionHandlerEvent<>(this::handleReceiverMtu, this::handleReceiverFail);
+
+        ByteBuffer buffer = ByteBuffer.allocate(32);
+        channel.read(buffer, buffer, chEventReceiverMtu);
+    }
+
+    protected synchronized void directSend(byte[] data, int identifier){
+        sendQueue.add(new DataPacket(data, identifier));
+        if(!isTransfer)
+            this.beginTransfer();
+    }
     /* **************************************************************************************
      *  Private method
      */
 
     private void handleConnect(Void result, Object attachment){
+        this.statusConnectedTime = Instant.now().getEpochSecond();
+        this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+        this.transferMtu();
         this.beginReceiver();
         this.onConnect();
     }
 
     private void handleConnectFail(Throwable exc, Object attachment){
-        this.eventHandler.executeRunnable(this::onConnectFail);
+        this.onConnectFail();
     }
 
     private void handleReceiver(Integer result, ByteBuffer attachment){
         if(result != -1){
+            this.statusReceiverCount++;
+            this.statusReceiverSize += attachment.remaining();
             this.beginReceiver();
-            this.eventHandler.executeConsumer(this::executeReceiver, attachment);
+            this.executeReceiver(attachment);
         }else {
-            this.eventHandler.executeRunnable(this::onRemoteDisconnect);
+            this.onRemoteDisconnect();
         }
     }
 
     private void handleReceiverFail(Throwable exc, ByteBuffer attachment){
-        this.eventHandler.executeRunnable(this::onRemoteDisconnect);
+        this.onRemoteDisconnect();
     }
 
     private void handleTransfer(Integer result, DataPacket attachment){
         if(result != -1){
+            this.statusTransferCount++;
+            this.statusTransferSize += attachment.data.length;
             this.beginTransfer();
-            this.eventHandler.executeConsumer(this::executeTransfer, attachment);
+            this.executeTransfer(attachment);
         }else{
-            this.eventHandler.executeRunnable(this::onRemoteDisconnect);
+            this.onRemoteDisconnect();
         }
     }
 
     private void handleTransferFail(Throwable exc, DataPacket attachment){
-        this.eventHandler.executeRunnable(this::onRemoteDisconnect);
+        this.onRemoteDisconnect();
+    }
+
+    private void handleReceiverMtu(Integer result, ByteBuffer attachment){
+        if(result != -1){
+            this.statusReceiverCount++;
+            this.statusReceiverSize += attachment.remaining();
+
+            attachment.flip();
+
+            //mtu format error
+            if(attachment.remaining() != 4){
+                this.disconnect();
+                return;
+            }
+
+            this.maximumTransmissionUnit = attachment.getInt();
+            this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+
+            this.onReceiverMtu(this.maximumTransmissionUnit);
+            this.beginReceiver();
+
+        }else {
+            this.onRemoteDisconnect();
+        }
     }
 
     private void executeReceiver(ByteBuffer byteBuffer){
@@ -271,23 +355,13 @@ public abstract class TcpClient extends TcpChannel{
         byte[] data = new byte[byteBuffer.remaining()];
         byteBuffer.get(data, 0, data.length);
         this.byteBufferPool.free(byteBuffer);
+        //System.out.println("executeReceiver size = " + data.length);
         this.onReceiver(data);
     }
 
     private void executeTransfer(DataPacket dataPacket){
-         this.onTransfer(dataPacket.data, dataPacket.identifier);
-    }
-
-    /* **************************************************************************************
-     *  Private construct method
-     */
-    private EventHandler constructEventHandler(){
-        return new EventHandler(){
-            @Override
-            protected Executor getExecutor() {
-                return TcpClient.this.getExecutor();
-            }
-        };
+        //System.out.println("executeTransfer size = " + dataPacket.data.length);
+        this.onTransfer(dataPacket.data, dataPacket.identifier);
     }
 
     /* **************************************************************************************

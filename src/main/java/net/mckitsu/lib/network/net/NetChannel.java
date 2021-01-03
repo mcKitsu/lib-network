@@ -2,6 +2,7 @@ package net.mckitsu.lib.network.net;
 
 import net.mckitsu.lib.network.tcp.TcpChannel;
 import net.mckitsu.lib.network.tcp.TcpClient;
+import net.mckitsu.lib.util.EventHandler;
 import net.mckitsu.lib.util.encrypt.AES;
 import net.mckitsu.lib.util.encrypt.RSA;
 
@@ -19,48 +20,30 @@ import java.util.concurrent.TimeUnit;
 public abstract class NetChannel extends TcpClient {
     private boolean verifyFinish;
     private byte[] aesKey;
-    private byte[] verifyKey;
     private LifeCycle lifeCycle;
     private AES EncryptAES;
     private RSA EncryptRSA;
 
     protected abstract void onRead(byte[] data);
     protected abstract void onSend(int identifier);
-    protected abstract void onDisconnect();
-    protected abstract void onRemoteDisconnect();
-    protected abstract void onConnect();
-    protected abstract void onConnectFail(ConnectFailType type);
+    protected abstract void onHandshake();
     protected abstract Executor getExecutor();
 
 
-    public NetChannel(byte[] verifyKey) throws IOException {
-        super();
-        this.verifyKey = verifyKey;
-        this.lifeCycle = LifeCycle.NONE;
+    public NetChannel(int bufferSize) {
+        super(bufferSize);
+        this.lifeCycle = LifeCycle.MASTER_NONE;
         this.verifyFinish = false;
     }
 
-    protected NetChannel(TcpChannel tcpChannel, byte[] verifyKey) throws IOException {
+    protected NetChannel(TcpChannel tcpChannel) throws IOException {
         super(tcpChannel);
 
         if(!super.isConnect())
             throw new IOException("TcpChannel is not already connect channel");
 
-        this.verifyKey = verifyKey;
-        this.lifeCycle = LifeCycle.WAIT_AES_KEY;
+        this.lifeCycle = LifeCycle.SLAVE_WAIT_MTU;
         this.verifyFinish = false;
-
-        try {
-            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
-            keyPairGenerator.initialize(512);
-            KeyPair keyPair = keyPairGenerator.generateKeyPair();
-            this.EncryptRSA = new RSA(keyPair.getPrivate());
-
-            //send rsa key as origin data
-            super.send(keyPair.getPublic().getEncoded(),  0);
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new IOException(e);
-        }
     }
 
     /* **************************************************************************************
@@ -68,75 +51,52 @@ public abstract class NetChannel extends TcpClient {
      */
 
     @Override
-    public synchronized void send(byte[] data, int identifier) {
+    public boolean send(byte[] data, int identifier) {
         if(this.verifyFinish)
-            this.encryptSend(data, identifier);
+            return this.encryptSend(data, identifier);
+
+        return false;
     }
 
     @Override
-    public boolean connect(InetSocketAddress remoteAddress, int identifier){
+    public boolean connect(InetSocketAddress remoteAddress){
         if(super.isConnect()){
-            doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
             return false;
         }else {
             this.verifyFinish = false;
-            this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
-            return super.connect(remoteAddress, identifier);
+            this.lifeCycle = LifeCycle.MASTER_WAIT_RSA_KEY;
+            return super.connect(remoteAddress);
         }
     }
 
     @Override
-    public void connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit){
+    public boolean connect(InetSocketAddress remoteAddress, long timeout, TimeUnit unit){
         if(super.isConnect()){
-            doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
+            return false;
         }else{
             this.verifyFinish = false;
-            this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
+            this.lifeCycle = LifeCycle.MASTER_WAIT_RSA_KEY;
             super.connect(remoteAddress, timeout, unit);
+            return true;
         }
     }
 
     @Override
-    public void connect(InetSocketAddress remoteAddress, int attachment, CompletionHandler<Void,Integer> handler){
+    public <A> boolean connect(InetSocketAddress remoteAddress, A attachment, CompletionHandler<Void, ? super A> handler){
         if(super.isConnect()){
-            doExecutor(() -> this.onConnectFail(ConnectFailType.ALREADY_CONNECT));
+            return false;
         }else{
             this.verifyFinish = false;
-            this.lifeCycle = LifeCycle.WAIT_RSA_KEY;
+            this.lifeCycle = LifeCycle.MASTER_WAIT_RSA_KEY;
             super.connect(remoteAddress, attachment, handler);
+            return true;
         }
-    }
-
-    @Override
-    protected void onDisconnect(DisconnectType type) {
-        if(this.verifyFinish){
-            switch (type) {
-                case INITIATIVE:
-                    doExecutor(this::onDisconnect);
-                    break;
-                case REMOTE:
-                    doExecutor(this::onRemoteDisconnect);
-                    break;
-            }
-
-        }else{
-            if(type == DisconnectType.REMOTE)
-                doExecutor(() -> this.onConnectFail(ConnectFailType.VERIFY_FAIL));
-        }
-    }
-
-    @Override
-    protected void onConnect(int identifier){}
-
-    @Override
-    protected void onConnectFail(int identifier) {
-        this.onConnectFail(ConnectFailType.TIMEOUT);
     }
 
     @Override
     protected void onTransfer(byte[] data, int identifier){
         if(this.verifyFinish)
-            this.doExecutor(() -> this.onSend(identifier));
+            this.onSend(identifier);
     }
 
     @Override
@@ -145,23 +105,32 @@ public abstract class NetChannel extends TcpClient {
             byte[] decryptData = this.EncryptAES.decrypt(data);
             if(decryptData != null)
                 this.onRead(decryptData);
-            return;
+        }else{
+            this.lifeCycle = connectStep(data, this.lifeCycle);
+            switch (this.lifeCycle) {
+                case SUCCESS:
+                    this.verifyFinish = true;
+                    this.onHandshake();
+                    break;
+                case EXCEPTION:
+                case ERROR:
+                    this.disconnect();
+                    break;
+            }
         }
+    }
 
-        this.lifeCycle = connectStep(data, this.lifeCycle);
-        switch (this.lifeCycle) {
-            case SUCCESS:
-                this.verifyFinish = true;
-                this.doExecutor(this::onConnect);
-                break;
-            case EXCEPTION:
-                this.disconnect();
-                this.doExecutor(() -> this.onConnectFail(ConnectFailType.EXCEPTION));
-                break;
-            case ERROR:
-                this.disconnect();
-                this.doExecutor(() -> this.onConnectFail(ConnectFailType.VERIFY_FAIL));
-                break;
+    @Override
+    protected void onReceiverMtu(int maximumTransmissionUnit) {
+        this.lifeCycle = LifeCycle.SLAVE_WAIT_AES_KEY;
+        System.out.println("onReceiverMtu size = " + maximumTransmissionUnit);
+        if(maximumTransmissionUnit <= 96)
+            super.disconnect();
+
+        try {
+            this.beginEncrypt();
+        } catch (IOException e) {
+            super.disconnect();
         }
     }
 
@@ -169,13 +138,22 @@ public abstract class NetChannel extends TcpClient {
      *  Private method
      */
 
-    private void encryptSend(byte[] data, int identifier){
-        super.send(EncryptAES.encrypt(data), identifier);
+    private String byteToString(byte[] data){
+        StringBuilder stringBuilder = new StringBuilder();
+        for(byte d : data){
+            stringBuilder.append(String.format("0x%02X ", d));
+        }
+        return stringBuilder.toString();
+    }
+
+    private boolean encryptSend(byte[] data, int identifier){
+        return super.send(EncryptAES.encrypt(data), identifier);
     }
 
     private LifeCycle connectStep(byte[] data ,LifeCycle lifeCycle){
+        System.out.println(lifeCycle);
         switch (lifeCycle) {
-            case WAIT_RSA_KEY:
+            case MASTER_WAIT_RSA_KEY:
                 try {
                     EncryptRSA = new RSA(data, RSA.KeyType.PUBLIC_KEY);
 
@@ -191,9 +169,9 @@ public abstract class NetChannel extends TcpClient {
                 } catch (NoSuchAlgorithmException | InvalidKeyException | InvalidKeySpecException | NullPointerException ignored) {
                     return LifeCycle.EXCEPTION;
                 }
-                return LifeCycle.WAIT_AES_KEY_RESP;
+                return LifeCycle.SLAVE_WAIT_AES_KEY_RESP;
 
-            case WAIT_AES_KEY:
+            case SLAVE_WAIT_AES_KEY:
                 try {
                     EncryptAES = new AES(EncryptRSA.decrypt(data));
                     this.encryptSend(EncryptRSA.decrypt(data), 0);
@@ -201,52 +179,61 @@ public abstract class NetChannel extends TcpClient {
                 } catch (NoSuchAlgorithmException | InvalidKeyException | NullPointerException ignored) {
                     return LifeCycle.EXCEPTION;
                 }
-                return LifeCycle.WAIT_VERIFY_KEY;
+                return LifeCycle.SUCCESS;
 
-            case WAIT_AES_KEY_RESP:
+            case SLAVE_WAIT_AES_KEY_RESP:
                 if(Arrays.equals(EncryptAES.decrypt(data), this.aesKey)){
-                    this.encryptSend(this.verifyKey, 0);
-                    return LifeCycle.WAIT_SUCCESS;
+                    return LifeCycle.SUCCESS;
                 }
                 return LifeCycle.ERROR;
 
-            case WAIT_VERIFY_KEY:
-                if(Arrays.equals(EncryptAES.decrypt(data), this.verifyKey)){
-                    this.encryptSend(this.verifyKey, 0);
-                    return LifeCycle.SUCCESS;
-                }
-                return LifeCycle.ERROR;
-            case WAIT_SUCCESS:
-                if(Arrays.equals(EncryptAES.decrypt(data), this.verifyKey)) {
-                    return LifeCycle.SUCCESS;
-                }
             default:
                 return LifeCycle.ERROR;
         }
     }
 
-    /* **************************************************************************************
-     *  Protected Class/Enum
-     */
+    private void beginEncrypt() throws IOException {
+        try {
+            KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
+            keyPairGenerator.initialize(512);
+            KeyPair keyPair = keyPairGenerator.generateKeyPair();
+            this.EncryptRSA = new RSA(keyPair.getPrivate());
 
+            //send rsa key as origin data
+            super.send(keyPair.getPublic().getEncoded(),  0);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new IOException(e);
+        }
+    }
+
+    /* **************************************************************************************
+     *  Private construct method
+     */
+    private EventHandler constructEventHandler(){
+        return new EventHandler(){
+            @Override
+            protected Executor getExecutor() {
+                return NetChannel.this.getExecutor();
+            }
+        };
+    }
+    /* **************************************************************************************
+     *  Enum LifeCycle
+     */
     protected enum LifeCycle{
-        NONE,
-        WAIT_RSA_KEY,
-        WAIT_AES_KEY,
-        WAIT_AES_KEY_RESP,
-        WAIT_VERIFY_KEY,
-        WAIT_SUCCESS,
+        MASTER_NONE,
+        MASTER_WAIT_RSA_KEY,
+        SLAVE_WAIT_MTU,
+        SLAVE_WAIT_AES_KEY,
+        SLAVE_WAIT_AES_KEY_RESP,
         SUCCESS,
         EXCEPTION,
         ERROR,
     }
 
-    public enum ConnectFailType{
-        TIMEOUT,
-        EXCEPTION,
-        VERIFY_FAIL,
-        ALREADY_CONNECT,
-    }
+    /* **************************************************************************************
+     *  Enum ConnectFailType
+     */
 }
 /* **************************************************************************************
  *  End of file

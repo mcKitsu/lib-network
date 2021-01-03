@@ -16,25 +16,28 @@ public class NetClient extends NetChannel {
 
     private final NetClientSlotManager slotManager;
     private final ExecutorService executorService;
+    private final EventHandler eventHandler;
 
     /* **************************************************************************************
      *  Construct method
      */
-    protected NetClient(TcpChannel tcpChannel, byte[] verifyKey, ExecutorService executorService) throws IOException {
-        super(tcpChannel, verifyKey);
+    protected NetClient(TcpChannel tcpChannel, int bufferSize, ExecutorService executorService) throws IOException {
+        super(tcpChannel);
         this.executorService = executorService;
-        this.event = new Event(getExecutor());
+        this.eventHandler = EventHandlers.newExecuteEventHandler(executorService);
+        this.event = new Event();
         this.slotManager = this.constructSlotManager();
     }
 
-    public NetClient(byte[] verifyKey) throws IOException {
-        this(verifyKey, null);
+    public NetClient(int bufferSize){
+        this(bufferSize, null);
     }
 
-    public NetClient(byte[] verifyKey, ExecutorService executorService) throws IOException {
-        super(verifyKey);
+    public NetClient(int bufferSize, ExecutorService executorService){
+        super(bufferSize);
         this.executorService = executorService;
-        this.event = new Event(getExecutor());
+        this.eventHandler = EventHandlers.newExecuteEventHandler(executorService);
+        this.event = new Event();
         this.slotManager = this.constructSlotManager();
     }
 
@@ -58,25 +61,30 @@ public class NetClient extends NetChannel {
     protected void onSend(int identifier){}
 
     @Override
+    protected void onHandshake() {
+        this.eventHandler.executeRunnable(this.event.onHandshake);
+    }
+
+    @Override
     protected void onDisconnect() {
         this.slotManager.close();
-        this.event.onDisconnect();
+        this.eventHandler.executeRunnable(this.event.onDisconnect);
     }
 
     @Override
     protected void onRemoteDisconnect() {
         this.slotManager.close();
-        this.event.onRemoteDisconnect();
+        this.eventHandler.executeRunnable(this.event.onRemoteDisconnect);
     }
 
     @Override
     protected void onConnect() {
-        this.event.onConnect(this);
+        this.eventHandler.executeConsumer(this.event.onConnect, this);
     }
 
     @Override
-    protected void onConnectFail(ConnectFailType type) {
-        this.event.onConnectFail();
+    protected void onConnectFail() {
+        this.eventHandler.executeRunnable(this.event.onConnectFail);
     }
 
     @Override
@@ -120,7 +128,7 @@ public class NetClient extends NetChannel {
                 if(NetClient.this.event.onAlloc == null)
                     return false;
 
-                NetClient.this.event.onAlloc(netClientSlot);
+                NetClient.this.eventHandler.execute(NetClient.this.event.onAlloc, this);
                 return true;
             }
 
@@ -129,7 +137,7 @@ public class NetClient extends NetChannel {
                 if(NetClient.this.event.onAccept == null)
                     return false;
 
-                NetClient.this.event.onAccept(netClientSlot);
+                NetClient.this.eventHandler.execute(NetClient.this.event.onAccept, this);
                 return true;
             }
         };
@@ -139,21 +147,18 @@ public class NetClient extends NetChannel {
      *  Class Event
      */
     public static class Event{
-        private final EventHandler eventHandler;
-
         private @Setter Runnable onDisconnect;
         private @Setter Runnable onRemoteDisconnect;
         private @Setter Runnable onConnectFail;
         private @Setter Consumer<NetClient> onConnect;
         private @Setter Consumer<NetClientSlot> onAccept;
         private @Setter Consumer<NetClientSlot> onAlloc;
+        private @Setter Runnable onHandshake;
 
         /* **************************************************************************************
          *  construct Event.method
          */
-        private Event(Executor executor){
-            this.eventHandler = EventHandlers.newExecuteEventHandler(executor);
-        }
+        private Event(){}
 
         /* **************************************************************************************
          *  public Event.method
@@ -166,34 +171,12 @@ public class NetClient extends NetChannel {
             this.setOnConnectFail(event::onConnectFail);
             this.setOnAccept(event::onAccept);
             this.setOnAlloc(event::onAlloc);
+            this.setOnHandshake(event::onHandshake);
         }
 
         /* **************************************************************************************
          *  protected Event.method
          */
-        protected boolean onDisconnect(){
-            return this.eventHandler.execute(this.onDisconnect);
-        }
-
-        protected boolean onRemoteDisconnect(){
-            return this.eventHandler.execute(this.onRemoteDisconnect);
-        }
-
-        protected boolean onConnectFail(){
-            return this.eventHandler.execute(this.onConnectFail);
-        }
-
-        protected boolean onConnect(NetClient netClient){
-            return this.eventHandler.execute(this.onConnect, netClient);
-        }
-
-        protected boolean onAccept(NetClientSlot netClientSlot){
-            return this.eventHandler.execute(this.onAccept, netClientSlot);
-        }
-
-        protected boolean onAlloc(NetClientSlot netClientSlot){
-            return this.eventHandler.execute(this.onAlloc, netClientSlot);
-        }
 
         /* **************************************************************************************
          *  private Event.method

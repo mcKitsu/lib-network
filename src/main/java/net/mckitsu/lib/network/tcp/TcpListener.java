@@ -21,7 +21,6 @@ public abstract class TcpListener {
     /* **************************************************************************************
      *  Abstract method
      */
-    protected abstract Executor getExecutor();
 
     /**
      * 服務端啟動失敗後調用此方法
@@ -43,10 +42,6 @@ public abstract class TcpListener {
 
     public TcpListener() {
         this.completionHandlerEvent = new CompletionHandlerEvent() {
-            @Override
-            protected Executor getExecutor() {
-                return TcpListener.this.getExecutor();
-            }
 
             @Override
             protected boolean isStart() {
@@ -126,9 +121,8 @@ public abstract class TcpListener {
      */
 
     protected void accept(){
-        try{
-            serverChannel.accept(null, this.completionHandlerEvent);
-        } catch (NullPointerException ignore){}
+        System.out.println("TcpListener::accept");
+        serverChannel.accept(null, this.completionHandlerEvent);
     }
 
     /* **************************************************************************************
@@ -136,7 +130,6 @@ public abstract class TcpListener {
      */
 
     private static abstract class CompletionHandlerEvent implements CompletionHandler<AsynchronousSocketChannel, Object>{
-        protected abstract Executor getExecutor();
         protected abstract boolean isStart();
         protected abstract void accept();
         protected abstract void onAccept(TcpChannel tcpChannel);
@@ -145,11 +138,7 @@ public abstract class TcpListener {
         public void completed(AsynchronousSocketChannel channel, Object object) {
             if(this.isStart()){
                 this.accept();
-
-                if(this.getExecutor() != null)
-                    this.getExecutor().execute(() -> onAccept(new TcpChannel(channel)));
-                else
-                    this.onAccept(new TcpChannel(channel));
+                this.onAccept(new TcpChannel(channel));
             }
         }
 

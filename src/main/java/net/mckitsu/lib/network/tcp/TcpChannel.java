@@ -79,7 +79,7 @@ public class TcpChannel {
      * 停止與遠端連線.
      *
      */
-    public boolean disconnect(){
+    public synchronized boolean disconnect(){
         if(this.channel == null)
             return false;
 
@@ -101,7 +101,15 @@ public class TcpChannel {
     public boolean isConnect(){
         try {
             return channel.getRemoteAddress() != null;
-        } catch (IOException e) {
+        } catch (IOException | NullPointerException e) {
+            return false;
+        }
+    }
+
+    public boolean isOpen(){
+        try {
+            return channel.isOpen();
+        } catch (NullPointerException e){
             return false;
         }
     }
@@ -135,6 +143,10 @@ public class TcpChannel {
     /* **************************************************************************************
      *  protected method
      */
+
+    protected void channelOpen() throws IOException {
+        this.channel = AsynchronousSocketChannel.open();
+    }
 
     /* **************************************************************************************
      *  Private method

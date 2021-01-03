@@ -7,23 +7,24 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public abstract class NetServer extends TcpListener {
-    private final byte[] verifyKey;
     private final List<NetClient> listClient;
     private ExecutorService executorService;
+    private final int bufferSize;
 
     protected abstract void onAccept(NetClient netClient);
 
     /* **************************************************************************************
      *  Construct method
      */
-    public NetServer(byte[] verifyKey) {
+    public NetServer(int bufferSize) {
         super();
+        this.bufferSize = bufferSize;
         this.listClient = new LinkedList<>();
-        this.verifyKey = verifyKey;
         this.executorService = null;
     }
 
@@ -36,16 +37,12 @@ public abstract class NetServer extends TcpListener {
 
     @Override
     public void onAccept(TcpChannel tcpChannel) {
+        //System.out.println("NetServer::accept");
         try {
             this.executorService.execute(() -> constructNetChannel(tcpChannel));
         }catch (NullPointerException ignore){
             constructNetChannel(tcpChannel);
         }
-    }
-
-    @Override
-    protected ExecutorService getExecutorService() {
-        return this.executorService;
     }
 
     @Override
@@ -78,7 +75,7 @@ public abstract class NetServer extends TcpListener {
      */
     private void constructNetChannel(TcpChannel tcpChannel){
         try {
-            NetClient result = new NetClient(tcpChannel, this.verifyKey, this.executorService){
+            NetClient result = new NetClient(tcpChannel, bufferSize, this.executorService){
                 @Override
                 protected void onDisconnect() {
                     super.onDisconnect();
@@ -94,6 +91,7 @@ public abstract class NetServer extends TcpListener {
 
             this.listClient.add(result);
             result.event.setOnConnect(NetServer.this::onAccept);
+            onAccept(result);
 
         } catch (IOException e) {
             e.printStackTrace();

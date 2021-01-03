@@ -10,6 +10,8 @@ public interface NetClientEvent {
 
     void onConnectFail();
 
+    void onHandshake();
+
     void onConnect(NetClient netClient);
 
     void onAccept(NetClientSlot netClientSlot);
