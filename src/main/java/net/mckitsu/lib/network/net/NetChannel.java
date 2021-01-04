@@ -24,11 +24,18 @@ public abstract class NetChannel extends TcpClient {
     private AES EncryptAES;
     private RSA EncryptRSA;
 
+    /* **************************************************************************************
+     *  Abstract method
+     */
+
     protected abstract void onRead(byte[] data);
     protected abstract void onSend(int identifier);
     protected abstract void onHandshake();
     protected abstract Executor getExecutor();
 
+    /* **************************************************************************************
+     *  Construct method
+     */
 
     public NetChannel(int bufferSize) {
         super(bufferSize);
@@ -106,7 +113,7 @@ public abstract class NetChannel extends TcpClient {
             if(decryptData != null)
                 this.onRead(decryptData);
         }else{
-            this.lifeCycle = connectStep(data, this.lifeCycle);
+            this.lifeCycle = handshakeStep(data, this.lifeCycle);
             switch (this.lifeCycle) {
                 case SUCCESS:
                     this.verifyFinish = true;
@@ -123,12 +130,11 @@ public abstract class NetChannel extends TcpClient {
     @Override
     protected void onReceiverMtu(int maximumTransmissionUnit) {
         this.lifeCycle = LifeCycle.SLAVE_WAIT_AES_KEY;
-        System.out.println("onReceiverMtu size = " + maximumTransmissionUnit);
         if(maximumTransmissionUnit <= 96)
             super.disconnect();
 
         try {
-            this.beginEncrypt();
+            this.handshakeStart();
         } catch (IOException e) {
             super.disconnect();
         }
@@ -150,8 +156,7 @@ public abstract class NetChannel extends TcpClient {
         return super.send(EncryptAES.encrypt(data), identifier);
     }
 
-    private LifeCycle connectStep(byte[] data ,LifeCycle lifeCycle){
-        System.out.println(lifeCycle);
+    private LifeCycle handshakeStep(byte[] data , LifeCycle lifeCycle){
         switch (lifeCycle) {
             case MASTER_WAIT_RSA_KEY:
                 try {
@@ -192,7 +197,7 @@ public abstract class NetChannel extends TcpClient {
         }
     }
 
-    private void beginEncrypt() throws IOException {
+    private void handshakeStart() throws IOException {
         try {
             KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
             keyPairGenerator.initialize(512);
@@ -209,6 +214,7 @@ public abstract class NetChannel extends TcpClient {
     /* **************************************************************************************
      *  Private construct method
      */
+
     private EventHandler constructEventHandler(){
         return new EventHandler(){
             @Override
@@ -217,9 +223,11 @@ public abstract class NetChannel extends TcpClient {
             }
         };
     }
+
     /* **************************************************************************************
      *  Enum LifeCycle
      */
+
     protected enum LifeCycle{
         MASTER_NONE,
         MASTER_WAIT_RSA_KEY,
@@ -230,10 +238,6 @@ public abstract class NetChannel extends TcpClient {
         EXCEPTION,
         ERROR,
     }
-
-    /* **************************************************************************************
-     *  Enum ConnectFailType
-     */
 }
 /* **************************************************************************************
  *  End of file

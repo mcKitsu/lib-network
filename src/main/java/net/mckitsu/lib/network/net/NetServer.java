@@ -2,6 +2,7 @@ package net.mckitsu.lib.network.net;
 
 import net.mckitsu.lib.network.tcp.TcpChannel;
 import net.mckitsu.lib.network.tcp.TcpListener;
+import net.mckitsu.lib.util.EventHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -14,16 +15,22 @@ import java.util.concurrent.Executors;
 public abstract class NetServer extends TcpListener {
     private final List<NetClient> listClient;
     private ExecutorService executorService;
-    private final int bufferSize;
+    protected final EventHandler eventHandler;
+    private final int maximumTransmissionUnit;
+
+    /* **************************************************************************************
+     *  Abstract method
+     */
 
     protected abstract void onAccept(NetClient netClient);
 
     /* **************************************************************************************
      *  Construct method
      */
-    public NetServer(int bufferSize) {
+    public NetServer(int maximumTransmissionUnit) {
         super();
-        this.bufferSize = bufferSize;
+        this.eventHandler = constructEventHandler();
+        this.maximumTransmissionUnit = maximumTransmissionUnit;
         this.listClient = new LinkedList<>();
         this.executorService = null;
     }
@@ -32,17 +39,14 @@ public abstract class NetServer extends TcpListener {
      *  Override method
      */
     @Override
-    public void onOpenFail(IOException e) {
+    public void onOpenFail(Throwable e) {
     }
 
     @Override
     public void onAccept(TcpChannel tcpChannel) {
-        //System.out.println("NetServer::accept");
-        try {
-            this.executorService.execute(() -> constructNetChannel(tcpChannel));
-        }catch (NullPointerException ignore){
-            constructNetChannel(tcpChannel);
-        }
+        NetClient netClient = this.constructNetClient(tcpChannel);
+        if(netClient != null)
+            this.eventHandler.executeConsumer(this::onAccept, netClient);
     }
 
     @Override
@@ -58,7 +62,9 @@ public abstract class NetServer extends TcpListener {
         if(isStart()) {
             super.stop();
             for(NetClient netClient : listClient){
-                netClient.disconnect();
+                try {
+                    netClient.disconnect();
+                }catch (Throwable ignore){}
             }
 
             synchronized (this) {
@@ -73,28 +79,39 @@ public abstract class NetServer extends TcpListener {
     /* **************************************************************************************
      *  Private method
      */
-    private void constructNetChannel(TcpChannel tcpChannel){
+
+    /* **************************************************************************************
+     *  Private construct method
+     */
+    private EventHandler constructEventHandler(){
+        return new EventHandler(){
+            @Override
+            protected Executor getExecutor() {
+                return NetServer.this.executorService;
+            }
+        };
+    }
+
+    private NetClient constructNetClient(TcpChannel tcpChannel){
         try {
-            NetClient result = new NetClient(tcpChannel, bufferSize, this.executorService){
+            NetClient result = new NetClient(tcpChannel, maximumTransmissionUnit, this.executorService){
                 @Override
                 protected void onDisconnect() {
-                    super.onDisconnect();
                     NetServer.this.listClient.remove(this);
+                    super.onDisconnect();
                 }
 
                 @Override
                 protected void onRemoteDisconnect() {
-                    super.onRemoteDisconnect();
                     NetServer.this.listClient.remove(this);
+                    super.onRemoteDisconnect();
                 }
             };
 
             this.listClient.add(result);
-            result.event.setOnConnect(NetServer.this::onAccept);
-            onAccept(result);
-
+            return result;
         } catch (IOException e) {
-            e.printStackTrace();
+            return null;
         }
     }
 }

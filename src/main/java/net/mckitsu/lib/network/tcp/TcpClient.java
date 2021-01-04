@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @author  ZxyKira
  */
+
 public abstract class TcpClient extends TcpChannel{
     private final Queue<DataPacket> sendQueue;
     private final CompletionHandlerEvent<Void, Object> chEventConnect;
@@ -35,11 +36,9 @@ public abstract class TcpClient extends TcpChannel{
     private long statusConnectedTime = 0;
     private int maximumTransmissionUnit = 0;
 
-
     /* **************************************************************************************
      *  Abstract method
      */
-
 
     /**
      * 成功與遠端建立連線後調用此方法.

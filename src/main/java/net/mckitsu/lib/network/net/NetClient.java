@@ -19,8 +19,13 @@ public class NetClient extends NetChannel {
     private final EventHandler eventHandler;
 
     /* **************************************************************************************
+     *  Abstract method
+     */
+
+    /* **************************************************************************************
      *  Construct method
      */
+
     protected NetClient(TcpChannel tcpChannel, int maximumTransmissionUnit, ExecutorService executorService) throws IOException {
         super(tcpChannel, maximumTransmissionUnit);
         this.executorService = executorService;
@@ -44,6 +49,7 @@ public class NetClient extends NetChannel {
     /* **************************************************************************************
      *  Override method
      */
+
     @Override
     public boolean disconnect(){
         return super.disconnect();
@@ -78,6 +84,11 @@ public class NetClient extends NetChannel {
     }
 
     @Override
+    protected void onReceiverMtuFail(int maximumTransmissionUnit) {
+
+    }
+
+    @Override
     protected void onConnect() {
         this.eventHandler.executeConsumer(this.event.onConnect, this);
     }
@@ -102,6 +113,7 @@ public class NetClient extends NetChannel {
 
         return this.slotManager.alloc();
     }
+
     /* **************************************************************************************
      *  Private method
      */
@@ -115,6 +127,10 @@ public class NetClient extends NetChannel {
             send(packet.sourceData, netClientSlot.slotId);
         }
     }
+
+    /* **************************************************************************************
+     *  Private method construct
+     */
 
     private NetClientSlotManager constructSlotManager(){
         return new NetClientSlotManager(this.executorService) {
