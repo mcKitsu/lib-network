@@ -36,8 +36,8 @@ public abstract class NetChannel extends TcpClient {
         this.verifyFinish = false;
     }
 
-    protected NetChannel(TcpChannel tcpChannel) throws IOException {
-        super(tcpChannel);
+    protected NetChannel(TcpChannel tcpChannel, int maximumTransmissionUnit) throws IOException {
+        super(tcpChannel, maximumTransmissionUnit);
 
         if(!super.isConnect())
             throw new IOException("TcpChannel is not already connect channel");

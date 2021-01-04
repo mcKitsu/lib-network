@@ -38,7 +38,7 @@
         <dependency>
             <groupId>net.mckitsu.lib</groupId>
             <artifactId>lib-util</artifactId>
-            <version>0.1.10</version>
+            <version>0.1.12</version>
         </dependency>
     </dependencies>
 

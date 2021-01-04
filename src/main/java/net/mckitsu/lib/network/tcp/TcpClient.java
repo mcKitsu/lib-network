@@ -1,5 +1,6 @@
 package net.mckitsu.lib.network.tcp;
 
+import net.mckitsu.lib.util.event.CompletionHandlerEvent;
 import net.mckitsu.lib.util.pool.BufferPools;
 import net.mckitsu.lib.util.pool.ByteBufferPool;
 
@@ -11,7 +12,6 @@ import java.time.Instant;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
 
 /**
  * TCP Asynchronous Client.
@@ -82,6 +82,8 @@ public abstract class TcpClient extends TcpChannel{
 
     protected abstract void onReceiverMtu(int maximumTransmissionUnit);
 
+    protected abstract void onReceiverMtuFail(int maximumTransmissionUnit);
+
     /* **************************************************************************************
      *  Construct method
      */
@@ -105,9 +107,10 @@ public abstract class TcpClient extends TcpChannel{
      *
      * @param tcpChannel AsynchronousSocketChannel
      */
-    public TcpClient(TcpChannel tcpChannel) throws IOException {
+    public TcpClient(TcpChannel tcpChannel, int maximumTransmissionUnit) throws IOException {
         this();
         super.channel = tcpChannel.channel;
+        this.maximumTransmissionUnit = maximumTransmissionUnit;
 
         if(this.isConnect()){
             this.receiverMtu();
@@ -202,7 +205,7 @@ public abstract class TcpClient extends TcpChannel{
      * @param  identifier 識別碼.
      */
     public synchronized boolean send(byte[] data, int identifier){
-        if(data.length > maximumTransmissionUnit)
+        if(data.length > this.maximumTransmissionUnit)
             return false;
 
         sendQueue.add(new DataPacket(data, identifier));
@@ -287,6 +290,7 @@ public abstract class TcpClient extends TcpChannel{
     private void handleConnect(Void result, Object attachment){
         this.statusConnectedTime = Instant.now().getEpochSecond();
         this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+        this.isOnRemoteDisconnect = false;
         this.transferMtu();
         this.beginReceiver();
         this.onConnect();
@@ -303,12 +307,12 @@ public abstract class TcpClient extends TcpChannel{
             this.beginReceiver();
             this.executeReceiver(attachment);
         }else {
-            this.onRemoteDisconnect();
+            this.executeOnRemoteDisconnect();
         }
     }
 
     private void handleReceiverFail(Throwable exc, ByteBuffer attachment){
-        this.onRemoteDisconnect();
+        this.executeOnRemoteDisconnect();
     }
 
     private void handleTransfer(Integer result, DataPacket attachment){
@@ -318,12 +322,12 @@ public abstract class TcpClient extends TcpChannel{
             this.beginTransfer();
             this.executeTransfer(attachment);
         }else{
-            this.onRemoteDisconnect();
+            this.executeOnRemoteDisconnect();
         }
     }
 
     private void handleTransferFail(Throwable exc, DataPacket attachment){
-        this.onRemoteDisconnect();
+        this.executeOnRemoteDisconnect();
     }
 
     private void handleReceiverMtu(Integer result, ByteBuffer attachment){
@@ -339,14 +343,21 @@ public abstract class TcpClient extends TcpChannel{
                 return;
             }
 
-            this.maximumTransmissionUnit = attachment.getInt();
-            this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+            int targetMtu = attachment.getInt();
 
-            this.onReceiverMtu(this.maximumTransmissionUnit);
+            //out of support mtu limit
+            if(targetMtu > this.maximumTransmissionUnit){
+                this.onReceiverMtuFail(targetMtu);
+                disconnect();
+            }
+
+            this.byteBufferPool = BufferPools.newCacheBufferPool(64, targetMtu);
+
+            this.onReceiverMtu(targetMtu);
             this.beginReceiver();
 
         }else {
-            this.onRemoteDisconnect();
+            this.executeOnRemoteDisconnect();
         }
     }
 
@@ -364,27 +375,10 @@ public abstract class TcpClient extends TcpChannel{
         this.onTransfer(dataPacket.data, dataPacket.identifier);
     }
 
-    /* **************************************************************************************
-     *  Class CompletionHandlerEvent
-     */
-
-    private static class CompletionHandlerEvent<R, T> implements CompletionHandler<R, T>{
-        private final BiConsumer<R, T> completed;
-        private final BiConsumer<Throwable, T>failed;
-
-        public CompletionHandlerEvent(BiConsumer<R, T> completed, BiConsumer<Throwable, T>failed){
-            this.completed = completed;
-            this.failed = failed;
-        }
-
-        @Override
-        public void completed(R result, T attachment) {
-                this.completed.accept(result, attachment);
-        }
-
-        @Override
-        public void failed(Throwable exc, T attachment) {
-            this.failed.accept(exc, attachment);
+    private synchronized void executeOnRemoteDisconnect(){
+        if(!this.isOnRemoteDisconnect) {
+            this.isOnRemoteDisconnect = true;
+            this.onRemoteDisconnect();
         }
     }
 

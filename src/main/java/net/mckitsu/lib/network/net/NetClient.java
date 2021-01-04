@@ -21,8 +21,8 @@ public class NetClient extends NetChannel {
     /* **************************************************************************************
      *  Construct method
      */
-    protected NetClient(TcpChannel tcpChannel, int bufferSize, ExecutorService executorService) throws IOException {
-        super(tcpChannel);
+    protected NetClient(TcpChannel tcpChannel, int maximumTransmissionUnit, ExecutorService executorService) throws IOException {
+        super(tcpChannel, maximumTransmissionUnit);
         this.executorService = executorService;
         this.eventHandler = EventHandlers.newExecuteEventHandler(executorService);
         this.event = new Event();
