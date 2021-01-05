@@ -6,14 +6,14 @@ import net.mckitsu.lib.util.EventHandler;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public abstract class NetServer extends TcpListener {
-    private final List<NetClient> listClient;
+    private final Queue<NetClient> listClient;
     private ExecutorService executorService;
     protected final EventHandler eventHandler;
     private final int maximumTransmissionUnit;
@@ -31,7 +31,7 @@ public abstract class NetServer extends TcpListener {
         super();
         this.eventHandler = constructEventHandler();
         this.maximumTransmissionUnit = maximumTransmissionUnit;
-        this.listClient = new LinkedList<>();
+        this.listClient = new ConcurrentLinkedQueue<>();
         this.executorService = null;
     }
 
@@ -76,6 +76,53 @@ public abstract class NetServer extends TcpListener {
             this.executorService.shutdown();
         }
     }
+    /* **************************************************************************************
+     *  Public method
+     */
+    public long getStatusTransferCount(){
+        long result = 0;
+        for(NetClient n : this.listClient){
+            try {
+                result += n.getStatusTransferCount();
+            }catch (Throwable ignore){}
+        }
+        return result;
+    }
+
+    public long getStatusReceiverCount(){
+        long result = 0;
+        for(NetClient n : this.listClient){
+            try {
+                result += n.getStatusReceiverCount();
+            }catch (Throwable ignore){}
+        }
+        return result;
+    }
+
+    public long getStatusTransferSize(){
+        long result = 0;
+        for(NetClient n : this.listClient){
+            try {
+                result += n.getStatusTransferSize();
+            }catch (Throwable ignore){}
+        }
+        return result;
+    }
+
+    public long getStatusReceiverSize() {
+        long result = 0;
+        for(NetClient n : this.listClient){
+            try {
+                result += n.getStatusReceiverSize();
+            }catch (Throwable ignore){}
+        }
+        return result;
+    }
+
+    public long getClientCount(){
+        return this.listClient.size();
+    }
+
     /* **************************************************************************************
      *  Private method
      */

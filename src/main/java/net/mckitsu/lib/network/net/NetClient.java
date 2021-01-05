@@ -51,6 +51,13 @@ public class NetClient extends NetChannel {
      */
 
     @Override
+    public int getMaximumTransmissionUnit(){
+        int result = super.getMaximumTransmissionUnit();
+        result = (result & 0xFFFFFFF0) - 1;
+        return result;
+    }
+
+    @Override
     public boolean disconnect(){
         return super.disconnect();
     }

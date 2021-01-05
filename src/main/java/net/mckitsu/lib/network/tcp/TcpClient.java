@@ -9,8 +9,8 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.time.Instant;
-import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -24,7 +24,7 @@ public abstract class TcpClient extends TcpChannel{
     private final CompletionHandlerEvent<Void, Object> chEventConnect;
     private final CompletionHandlerEvent<Integer, ByteBuffer> chEventReceiver;
     private final CompletionHandlerEvent<Integer, DataPacket> chEventTransfer;
-    private ByteBufferPool byteBufferPool;
+    public ByteBufferPool byteBufferPool;
 
     private boolean isTransfer;
     private boolean isOnRemoteDisconnect;
@@ -92,13 +92,14 @@ public abstract class TcpClient extends TcpChannel{
         this.chEventTransfer = new CompletionHandlerEvent<>(this::handleTransfer, this::handleTransferFail);
         this.isTransfer = false;
         this.isOnRemoteDisconnect = false;
-        this.sendQueue = new LinkedList<>();
+        this.sendQueue = new ConcurrentLinkedQueue<>();
     }
 
     public TcpClient(int maximumTransmissionUnit){
         this();
         this.maximumTransmissionUnit = maximumTransmissionUnit;
-        this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+        this.byteBufferPool = BufferPools.newCacheBufferPool(16, this.maximumTransmissionUnit);
+        this.byteBufferPool.setRecycleTimeInterval(5);
     }
 
     /**
@@ -288,7 +289,8 @@ public abstract class TcpClient extends TcpChannel{
 
     private void handleConnect(Void result, Object attachment){
         this.statusConnectedTime = Instant.now().getEpochSecond();
-        this.byteBufferPool = BufferPools.newCacheBufferPool(64, this.maximumTransmissionUnit);
+        this.byteBufferPool = BufferPools.newCacheBufferPool(16, this.maximumTransmissionUnit);
+        this.byteBufferPool.setRecycleTimeInterval(5);
         this.isOnRemoteDisconnect = false;
         this.transferMtu();
         this.beginReceiver();
@@ -302,7 +304,7 @@ public abstract class TcpClient extends TcpChannel{
     private void handleReceiver(Integer result, ByteBuffer attachment){
         if(result != -1){
             this.statusReceiverCount++;
-            this.statusReceiverSize += attachment.remaining();
+            this.statusReceiverSize += attachment.position();
             this.beginReceiver();
             this.executeReceiver(attachment);
         }else {
@@ -332,7 +334,7 @@ public abstract class TcpClient extends TcpChannel{
     private void handleReceiverMtu(Integer result, ByteBuffer attachment){
         if(result != -1){
             this.statusReceiverCount++;
-            this.statusReceiverSize += attachment.remaining();
+            this.statusReceiverSize += attachment.position();
 
             attachment.flip();
 
@@ -350,7 +352,8 @@ public abstract class TcpClient extends TcpChannel{
                 disconnect();
             }
 
-            this.byteBufferPool = BufferPools.newCacheBufferPool(64, targetMtu);
+            this.byteBufferPool = BufferPools.newCacheBufferPool(16, targetMtu);
+            this.byteBufferPool.setRecycleTimeInterval(5);
 
             this.onReceiverMtu(targetMtu);
             this.beginReceiver();

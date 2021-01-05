@@ -2,7 +2,6 @@ package net.mckitsu.lib.network.net;
 
 import net.mckitsu.lib.network.tcp.TcpChannel;
 import net.mckitsu.lib.network.tcp.TcpClient;
-import net.mckitsu.lib.util.EventHandler;
 import net.mckitsu.lib.util.encrypt.AES;
 import net.mckitsu.lib.util.encrypt.RSA;
 
@@ -56,6 +55,8 @@ public abstract class NetChannel extends TcpClient {
     /* **************************************************************************************
      *  Override method
      */
+
+
 
     @Override
     public boolean send(byte[] data, int identifier) {
@@ -214,15 +215,6 @@ public abstract class NetChannel extends TcpClient {
     /* **************************************************************************************
      *  Private construct method
      */
-
-    private EventHandler constructEventHandler(){
-        return new EventHandler(){
-            @Override
-            protected Executor getExecutor() {
-                return NetChannel.this.getExecutor();
-            }
-        };
-    }
 
     /* **************************************************************************************
      *  Enum LifeCycle
