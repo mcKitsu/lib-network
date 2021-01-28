@@ -1,6 +1,8 @@
-import net.mckitsu.lib.network.net.NetClient;
+import net.mckitsu.lib.network.tcp.TcpClient;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.Scanner;
 
 public class Client {
@@ -11,10 +13,6 @@ public class Client {
 
     public void run(){
         System.out.println("Client");
-
-        NetClient netClient = new NetClient(16384);
-        netClient.event.setEvent(new NetClientEventHandle());
-        netClient.connect(new InetSocketAddress("127.0.0.1", 8888));
 
         Scanner scanner = new Scanner(System.in);
         scanner.nextLine();
