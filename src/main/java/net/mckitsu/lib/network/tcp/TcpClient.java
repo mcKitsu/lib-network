@@ -1,12 +1,12 @@
 package net.mckitsu.lib.network.tcp;
 
-import net.mckitsu.lib.util.pool.ByteBufferPool;
+import net.mckitsu.lib.network.Client;
+import net.mckitsu.lib.network.ClientEvent;
+import net.mckitsu.lib.network.tcp.handshake.*;
+import net.mckitsu.lib.util.encrypt.AES;
+import net.mckitsu.lib.util.event.CompletionHandlerEvent;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
+import java.net.SocketAddress;
 
 /**
  * TCP Asynchronous Client.
@@ -14,94 +14,185 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @author  ZxyKira
  */
 
-public abstract class TcpClient extends TcpChannel<byte[]>{
-    private final Queue<byte[]> sendQueue;
-    private ByteBufferPool byteBufferPool;
-    private int maximumTransmissionUnit;
+public class TcpClient implements Client {
+    /* **************************************************************************************
+     *  Variable <Public>
+     */
 
     /* **************************************************************************************
-     *  Abstract method
+     *  Variable <Protected>
      */
-    protected abstract void onSend(byte[] data);
-
-    protected abstract void onRead(byte[] data);
+    protected final TcpChannel tcpChannel;
 
     /* **************************************************************************************
-     *  Construct method
+     *  Variable <Private>
      */
-    public TcpClient(){
-        this.sendQueue = new ConcurrentLinkedQueue<>();
-        this.maximumTransmissionUnit = 1472;
+    private boolean alreadyOnRemoteDisconnect = false;
+    private final HandshakeMtu networkHandshakeMtu;
+    private final HandshakeEncrypt networkHandshakeEncrypt;
+    private final ClientEvent tcpClientEvent;
+
+    private final CompletionHandlerEvent<Integer, HandshakeMtu> completionHandlerEventNetworkHandshakeMtu
+            = new CompletionHandlerEvent<>(this::handleNetworkHandshakeMtu, this::handleNetworkHandshakeMtuFail);
+
+    private final CompletionHandlerEvent<AES, HandshakeEncrypt> completionHandlerEventNetworkHandshakeEncrypt
+            = new CompletionHandlerEvent<>(this::handleNetworkHandshakeEncrypt, this::handleNetworkHandshakeEncryptFail);
+
+    private final CompletionHandlerEvent<Void, Void> completionHandlerEventConnect
+            = new CompletionHandlerEvent<>(this::handleConnect, this::handleConnectFail);
+
+    /* **************************************************************************************
+     *  Abstract method <Public>
+     */
+
+    /* **************************************************************************************
+     *  Abstract method <Protected>
+     */
+
+    /* **************************************************************************************
+     *  Construct Method
+     */
+    public TcpClient(int maximumTransmissionUnit, ClientEvent tcpClientEvent){
+        this.tcpChannel = new TcpChannel();
+        this.tcpClientEvent = tcpClientEvent;
+        this.networkHandshakeMtu = new HandshakeMtuClient(this.tcpChannel, maximumTransmissionUnit);
+        this.networkHandshakeEncrypt = new HandshakeEncryptClient(this.tcpChannel);
     }
 
-    /**
-     * 建構子.
-     *
-     * @param tcpChannel AsynchronousSocketChannel
-     */
-    public TcpClient(TcpChannel tcpChannel, int maximumTransmissionUnit) throws IOException {
-        super(tcpChannel);
-        if(!super.isConnect())
-            throw new IOException("Channel is not connected");
-
-        this.sendQueue = new ConcurrentLinkedQueue<>();
-        this.maximumTransmissionUnit = maximumTransmissionUnit;
+    public TcpClient(TcpChannel tcpChannel, int maximumTransmissionUnit, ClientEvent tcpClientEvent){
+        this.tcpChannel = tcpChannel;
+        this.tcpClientEvent = tcpClientEvent;
+        this.networkHandshakeMtu = new HandshakeMtuServer(this.tcpChannel, maximumTransmissionUnit);
+        this.networkHandshakeEncrypt = new HandshakeEncryptServer(this.tcpChannel);
+        this.networkHandshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
     }
 
     /* **************************************************************************************
-     *  Override method
+     *  Public Method
      */
+
+    /* **************************************************************************************
+     *  Public Method <Override>
+     */
+    @Override
+    public void connect(SocketAddress socketAddress){
+        this.tcpChannel.connect(socketAddress, null, this.completionHandlerEventConnect);
+    }
 
     @Override
+    public synchronized void close(){
+        if(this.isConnect()){
+            this.close();
+            this.onDisconnect();
+        }
+    }
+
+    @Override
+    public SocketAddress getLocalAddress() {
+        return this.tcpChannel.getLocalAddress();
+    }
+
+    @Override
+    public SocketAddress getRemoteAddress() {
+        return this.tcpChannel.getRemoteAddress();
+    }
+
+    @Override
+    public boolean isConnect() {
+        return this.tcpChannel.isConnect();
+    }
+
+    @Override
+    public boolean isOpen() {
+        return this.tcpChannel.isOpen();
+    }
+
+    @Override
+    public void write(byte[] data) {
+
+    }
+
+    /* **************************************************************************************
+     *  Public Method <Static>
+     */
+
+    /* **************************************************************************************
+     *  Protected Method
+     */
     protected void onConnect(){
-
+        this.alreadyOnRemoteDisconnect = false;
+        try{
+            this.tcpClientEvent.onConnect(this);
+        }catch (Throwable ignore){}
     }
 
-    @Override
-    protected void onConnectFail(){}
+    protected void onConnectFail(){
+        try{
+            this.tcpClientEvent.onConnectFail(this);
+        }catch (Throwable ignore){}
+    }
 
-    @Override
-    protected void onDisconnect(){}
+    protected void onDisconnect(){
+        try{
+            this.tcpClientEvent.onDisconnect(this);
+        }catch (Throwable ignore){}
+    }
 
-    @Override
-    protected void onRemoteDisconnect(){}
+    protected void onDisconnectRemote(){
+        synchronized (this){
+            if(this.alreadyOnRemoteDisconnect)
+                return;
+        }
 
-    @Override
-    protected void onTransfer(ByteBuffer transferByteBuffer, byte[] attachment){}
-
-    @Override
-    protected void onTransferFail(ByteBuffer transferByteBuffer, byte[] attachment){}
-
-    @Override
-    protected void onReceiver(ByteBuffer receiverByteBuffer, byte[] attachment){}
-
-    @Override
-    protected void onReceiverFail(ByteBuffer receiverByteBuffer, byte[] attachment){}
+        this.alreadyOnRemoteDisconnect = true;
+        this.tcpChannel.close();
+        try {
+            this.tcpClientEvent.onDisconnectRemote(this);
+        }catch (Throwable ignore){}
+    }
 
     /* **************************************************************************************
-     *  Public method
-     */
-
-    public boolean setMaximumTransmissionUnit(int maximumTransmissionUnit) {
-        if(isConnect())
-            return false;
-
-        this.maximumTransmissionUnit = maximumTransmissionUnit;
-        return true;
-    }
-
-    public int getMaximumTransmissionUnit(){
-        return this.maximumTransmissionUnit;
-    }
-    /* **************************************************************************************
-     *  protected method
+     *  Protected Method <Override>
      */
 
     /* **************************************************************************************
-     *  Private method
+     *  Protected Method <Static>
      */
 
     /* **************************************************************************************
-     *  Class DataPacket
+     *  Private Method
+     */
+
+    private void handleNetworkHandshakeMtu(Integer result, HandshakeMtu attachment){
+        this.networkHandshakeEncrypt.accept(this.completionHandlerEventNetworkHandshakeEncrypt);
+        this.onConnect();
+    }
+
+    private void handleNetworkHandshakeMtuFail(Throwable throwable, HandshakeMtu attachment){
+        this.tcpChannel.close();
+        this.onConnectFail();
+    }
+
+    private void handleNetworkHandshakeEncrypt(AES result, HandshakeEncrypt attachment){
+        System.out.println("handleNetworkHandshakeEncrypt");
+    }
+
+    private void handleNetworkHandshakeEncryptFail(Throwable throwable, HandshakeEncrypt attachment){
+        System.out.println("handleNetworkHandshakeEncryptFail");
+    }
+
+    private void handleConnect(Void result, Void attachment){
+        this.networkHandshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
+    }
+
+    private void handleConnectFail(Throwable throwable, Void attachment){
+        this.onConnectFail();
+    }
+    /* **************************************************************************************
+     *  Private Method <Override>
+     */
+
+    /* **************************************************************************************
+     *  Private Method <Static>
      */
 }

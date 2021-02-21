@@ -1,16 +1,4 @@
-import net.mckitsu.lib.network.tcp.TcpClient;
+public class TestClient {
 
-import java.io.IOException;
 
-public class TestClient extends TcpClient {
-
-    @Override
-    protected void onSend(byte[] data) {
-
-    }
-
-    @Override
-    protected void onRead(byte[] data) {
-
-    }
 }

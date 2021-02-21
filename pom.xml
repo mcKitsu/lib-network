@@ -35,11 +35,6 @@
             <version>1.16.16</version>
             <scope>provided</scope>
         </dependency>
-        <dependency>
-            <groupId>net.mckitsu.lib</groupId>
-            <artifactId>lib-util</artifactId>
-            <version>0.1.12</version>
-        </dependency>
     </dependencies>
 
     <distributionManagement>
