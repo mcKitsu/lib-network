@@ -2,6 +2,7 @@ package net.mckitsu.lib.network.tcp;
 
 import net.mckitsu.lib.network.Client;
 import net.mckitsu.lib.network.ClientEvent;
+import net.mckitsu.lib.network.tcp.handler.HandlerTransceiver;
 import net.mckitsu.lib.network.tcp.handshake.*;
 import net.mckitsu.lib.util.encrypt.AES;
 import net.mckitsu.lib.util.event.CompletionHandlerEvent;
@@ -14,7 +15,7 @@ import java.net.SocketAddress;
  * @author  ZxyKira
  */
 
-public class TcpClient implements Client {
+public class TcpClient implements Client{
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -27,9 +28,11 @@ public class TcpClient implements Client {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private boolean alreadyOnRemoteDisconnect = false;
-    private final HandshakeMtu networkHandshakeMtu;
-    private final HandshakeEncrypt networkHandshakeEncrypt;
+    private final HandshakeMtu handshakeMtu;
+    private final HandshakeEncrypt handshakeEncrypt;
+    private final HandlerTransceiver handlerTransceiver;
+    private final HandlerTransceiver.EventEntity handlerTransceiverEvent;
+
     private final ClientEvent tcpClientEvent;
 
     private final CompletionHandlerEvent<Integer, HandshakeMtu> completionHandlerEventNetworkHandshakeMtu
@@ -40,6 +43,8 @@ public class TcpClient implements Client {
 
     private final CompletionHandlerEvent<Void, Void> completionHandlerEventConnect
             = new CompletionHandlerEvent<>(this::handleConnect, this::handleConnectFail);
+
+
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -55,16 +60,26 @@ public class TcpClient implements Client {
     public TcpClient(int maximumTransmissionUnit, ClientEvent tcpClientEvent){
         this.tcpChannel = new TcpChannel();
         this.tcpClientEvent = tcpClientEvent;
-        this.networkHandshakeMtu = new HandshakeMtuClient(this.tcpChannel, maximumTransmissionUnit);
-        this.networkHandshakeEncrypt = new HandshakeEncryptClient(this.tcpChannel);
+        this.handshakeMtu = new HandshakeMtuClient(this.tcpChannel, maximumTransmissionUnit);
+        this.handshakeEncrypt = new HandshakeEncryptClient(this.tcpChannel);
+        this.handlerTransceiver = new HandlerTransceiver();
+        this.handlerTransceiverEvent = new HandlerTransceiver.EventEntity();
+        this.handlerTransceiverEvent.onTransfer = this::onTransfer;
+        this.handlerTransceiverEvent.onReceiver = this::onReceiver;
+        this.handlerTransceiverEvent.onTransceiverFail = this::onTransceiverFail;
     }
 
     public TcpClient(TcpChannel tcpChannel, int maximumTransmissionUnit, ClientEvent tcpClientEvent){
         this.tcpChannel = tcpChannel;
         this.tcpClientEvent = tcpClientEvent;
-        this.networkHandshakeMtu = new HandshakeMtuServer(this.tcpChannel, maximumTransmissionUnit);
-        this.networkHandshakeEncrypt = new HandshakeEncryptServer(this.tcpChannel);
-        this.networkHandshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
+        this.handshakeMtu = new HandshakeMtuServer(this.tcpChannel, maximumTransmissionUnit);
+        this.handshakeEncrypt = new HandshakeEncryptServer(this.tcpChannel);
+        this.handshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
+        this.handlerTransceiver = new HandlerTransceiver();
+        this.handlerTransceiverEvent = new HandlerTransceiver.EventEntity();
+        this.handlerTransceiverEvent.onTransfer = this::onTransfer;
+        this.handlerTransceiverEvent.onReceiver = this::onReceiver;
+        this.handlerTransceiverEvent.onTransceiverFail = this::onTransceiverFail;
     }
 
     /* **************************************************************************************
@@ -109,7 +124,9 @@ public class TcpClient implements Client {
 
     @Override
     public void write(byte[] data) {
-
+        try{
+            this.handlerTransceiver.write(data);
+        }catch (Throwable ignore){}
     }
 
     /* **************************************************************************************
@@ -120,7 +137,6 @@ public class TcpClient implements Client {
      *  Protected Method
      */
     protected void onConnect(){
-        this.alreadyOnRemoteDisconnect = false;
         try{
             this.tcpClientEvent.onConnect(this);
         }catch (Throwable ignore){}
@@ -139,18 +155,29 @@ public class TcpClient implements Client {
     }
 
     protected void onDisconnectRemote(){
-        synchronized (this){
-            if(this.alreadyOnRemoteDisconnect)
-                return;
-        }
-
-        this.alreadyOnRemoteDisconnect = true;
-        this.tcpChannel.close();
         try {
             this.tcpClientEvent.onDisconnectRemote(this);
         }catch (Throwable ignore){}
     }
 
+    protected void onTransfer(byte[] data){
+        try {
+            this.tcpClientEvent.onTransfer(this, data);
+        }catch (Throwable ignore){}
+    }
+
+    protected void onReceiver(byte[] data){
+        try {
+            this.tcpClientEvent.onReceiver(this, data);
+        }catch (Throwable ignore){}
+    }
+
+    protected void onTransceiverFail(){
+        this.tcpChannel.close();
+        try{
+            this.onDisconnectRemote();
+        }catch (Throwable ignore){}
+    }
     /* **************************************************************************************
      *  Protected Method <Override>
      */
@@ -164,8 +191,8 @@ public class TcpClient implements Client {
      */
 
     private void handleNetworkHandshakeMtu(Integer result, HandshakeMtu attachment){
-        this.networkHandshakeEncrypt.accept(this.completionHandlerEventNetworkHandshakeEncrypt);
-        this.onConnect();
+        System.out.println(attachment.getResult());
+        this.handshakeEncrypt.accept(this.completionHandlerEventNetworkHandshakeEncrypt);
     }
 
     private void handleNetworkHandshakeMtuFail(Throwable throwable, HandshakeMtu attachment){
@@ -174,20 +201,27 @@ public class TcpClient implements Client {
     }
 
     private void handleNetworkHandshakeEncrypt(AES result, HandshakeEncrypt attachment){
-        System.out.println("handleNetworkHandshakeEncrypt");
+        this.handlerTransceiver.start(this.tcpChannel,
+                this.handshakeEncrypt.getResult(),
+                this.handshakeMtu.getResult(),
+                this.handlerTransceiverEvent);
+        this.onConnect();
     }
 
     private void handleNetworkHandshakeEncryptFail(Throwable throwable, HandshakeEncrypt attachment){
-        System.out.println("handleNetworkHandshakeEncryptFail");
+        this.tcpChannel.close();
+        this.onConnectFail();
     }
 
     private void handleConnect(Void result, Void attachment){
-        this.networkHandshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
+        this.handshakeMtu.accept(this.completionHandlerEventNetworkHandshakeMtu);
     }
 
     private void handleConnectFail(Throwable throwable, Void attachment){
         this.onConnectFail();
     }
+
+
     /* **************************************************************************************
      *  Private Method <Override>
      */

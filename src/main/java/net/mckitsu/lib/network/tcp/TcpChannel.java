@@ -95,9 +95,7 @@ public class TcpChannel implements Channel {
     public void close() {
         try {
             this.channel.close();
-        } catch (IOException|NullPointerException e) {
-            e.printStackTrace();
-        }
+        } catch (Throwable ignore) {}
     }
 
     @Override
