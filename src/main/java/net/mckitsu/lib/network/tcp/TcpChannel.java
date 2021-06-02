@@ -1,16 +1,12 @@
 package net.mckitsu.lib.network.tcp;
 
-import net.mckitsu.lib.network.Channel;
-import net.mckitsu.lib.network.NetworkException;
-import net.mckitsu.lib.network.NetworkExceptionList;
-import net.mckitsu.lib.util.event.CompletionHandlerEvent;
-
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 
-public class TcpChannel implements Channel {
+public class TcpChannel {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -49,10 +45,13 @@ public class TcpChannel implements Channel {
     /* **************************************************************************************
      *  Public Method <Override>
      */
-    @Override
-    public <A> void connect(SocketAddress remoteAddress, A attachment, CompletionHandlerEvent<Void, A> handlerEvent) {
+
+    /*----------------------------------------
+     *  connect
+     *----------------------------------------*/
+    public <A> void connect(SocketAddress remoteAddress, A attachment, CompletionHandler<Void,? super A> handler) {
         if(isConnect()) {
-            handlerEvent.failed(new NetworkException(NetworkExceptionList.ALREADY_CONNECT), attachment);
+            handler.failed(null , attachment);
             return;
         }
 
@@ -60,7 +59,7 @@ public class TcpChannel implements Channel {
             try {
                 this.channel = AsynchronousSocketChannel.open();
             } catch (IOException e) {
-                handlerEvent.failed(new NetworkException(NetworkExceptionList.CHANNEL_OPEN_FAIL, e), attachment);
+                handler.failed(e, attachment);
                 return;
             }
         }
@@ -69,20 +68,28 @@ public class TcpChannel implements Channel {
             try {
                 this.channel = AsynchronousSocketChannel.open();
             } catch (IOException e) {
-                handlerEvent.failed(new NetworkException(NetworkExceptionList.CHANNEL_OPEN_FAIL, e), attachment);
+                handler.failed(e, attachment);
                 return;
             }
         }
 
-        this.channel.connect(remoteAddress, attachment, handlerEvent);
+        this.channel.connect(remoteAddress, attachment, handler);
     }
 
-    @Override
+
+
+    /*----------------------------------------
+     *  isConnect
+     *----------------------------------------*/
     public boolean isConnect() {
         return this.getRemoteAddress() != null;
     }
 
-    @Override
+
+
+    /*----------------------------------------
+     *  isOpen
+     *----------------------------------------*/
     public boolean isOpen() {
         try {
             return this.channel.isOpen();
@@ -91,14 +98,22 @@ public class TcpChannel implements Channel {
         }
     }
 
-    @Override
+
+
+    /*----------------------------------------
+     *  close
+     *----------------------------------------*/
     public void close() {
         try {
             this.channel.close();
         } catch (Throwable ignore) {}
     }
 
-    @Override
+
+
+    /*----------------------------------------
+     *  getLocalAddress
+     *----------------------------------------*/
     public SocketAddress getLocalAddress() {
         try{
             return this.channel.getLocalAddress();
@@ -107,7 +122,11 @@ public class TcpChannel implements Channel {
         }
     }
 
-    @Override
+
+
+    /*----------------------------------------
+     *  getRemoteAddress
+     *----------------------------------------*/
     public SocketAddress getRemoteAddress() {
         try{
             return this.channel.getRemoteAddress();
@@ -116,23 +135,34 @@ public class TcpChannel implements Channel {
         }
     }
 
-    @Override
-    public <A> void read(ByteBuffer byteBuffer, A attachment, CompletionHandlerEvent<Integer, A> handlerEvent) {
+
+
+    /*----------------------------------------
+     *  read
+     *----------------------------------------*/
+    public <A> void read(ByteBuffer byteBuffer, A attachment, CompletionHandler<Integer, A> handlerEvent) {
         try{
             channel.read(byteBuffer, attachment, handlerEvent);
         }catch (Throwable e){
-            handlerEvent.failed(new NetworkException(NetworkExceptionList.CHANNEL_READ_FAIL, e), attachment);
+            handlerEvent.failed(e, attachment);
         }
     }
 
-    @Override
-    public <A> void write(ByteBuffer byteBuffer, A attachment, CompletionHandlerEvent<Integer, A> handlerEvent) {
+
+
+    /*----------------------------------------
+     *  write
+     *----------------------------------------*/
+    public <A> void write(ByteBuffer byteBuffer, A attachment, CompletionHandler<Integer, A> handlerEvent) {
         try {
             channel.write(byteBuffer, attachment, handlerEvent);
         }catch (Throwable e){
-            handlerEvent.failed(new NetworkException(NetworkExceptionList.CHANNEL_WRITE_FAIL, e), attachment);
+            handlerEvent.failed(e, attachment);
         }
     }
+
+
+
     /* **************************************************************************************
      *  Public Method <Static>
      */
@@ -160,5 +190,4 @@ public class TcpChannel implements Channel {
     /* **************************************************************************************
      *  Private Method <Static>
      */
-
 }

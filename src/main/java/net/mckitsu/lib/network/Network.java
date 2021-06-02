@@ -1,8 +1,8 @@
-package net.mckitsu.lib.network.tcp.handler;
+package net.mckitsu.lib.network;
 
-import java.nio.ByteBuffer;
+import java.net.SocketAddress;
 
-public class HandlerReorganization {
+public class Network {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -14,9 +14,6 @@ public class HandlerReorganization {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private final Event event;
-    private final ByteBuffer byteBuffer = ByteBuffer.allocate(16777216);
-    private int seasonLength;
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -29,37 +26,10 @@ public class HandlerReorganization {
     /* **************************************************************************************
      *  Construct Method
      */
-    public HandlerReorganization(Event event){
-        this.event = event;
-        this.seasonLength = 0;
-    }
 
     /* **************************************************************************************
      *  Public Method
      */
-    public synchronized void input(ByteBuffer input){
-        if(this.seasonLength==0){
-            this.seasonStart(input.getInt());
-        }
-
-        if(this.getLack() >= input.remaining()){
-            this.byteBuffer.put(input);
-            if(this.getLack() == 0){
-
-                this.byteBuffer.flip();
-                this.seasonLength = 0;
-                this.event.onHandlerReorganizationFinish(this.byteBuffer);
-            }
-        }else{
-            byte[] cache = new byte[this.getLack()];
-            input.get(cache);
-            this.byteBuffer.put(cache);
-            this.byteBuffer.flip();
-            this.seasonLength = 0;
-            this.event.onHandlerReorganizationFinish(this.byteBuffer);
-            this.input(input);
-        }
-    }
 
     /* **************************************************************************************
      *  Public Method <Override>
@@ -84,16 +54,6 @@ public class HandlerReorganization {
     /* **************************************************************************************
      *  Private Method
      */
-    private void seasonStart(int length){
-        this.byteBuffer.clear();
-        this.seasonLength = length;
-    }
-
-    private int getLack(){
-        System.out.println("getLack: " + (this.seasonLength - this.byteBuffer.position()));
-        return this.seasonLength - this.byteBuffer.position();
-    }
-
 
     /* **************************************************************************************
      *  Private Method <Override>
@@ -102,12 +62,4 @@ public class HandlerReorganization {
     /* **************************************************************************************
      *  Private Method <Static>
      */
-
-    /* **************************************************************************************
-     *  Public Interface Event
-     */
-
-    public interface Event{
-        void onHandlerReorganizationFinish(ByteBuffer byteBuffer);
-    }
 }

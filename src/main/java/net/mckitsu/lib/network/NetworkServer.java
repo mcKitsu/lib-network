@@ -1,14 +1,6 @@
-package net.mckitsu.lib.network.tcp.handshake;
+package net.mckitsu.lib.network;
 
-import net.mckitsu.lib.network.NetworkException;
-import net.mckitsu.lib.network.NetworkExceptionList;
-import net.mckitsu.lib.network.tcp.TcpChannel;
-import net.mckitsu.lib.util.encrypt.AES;
-import net.mckitsu.lib.util.event.CompletionHandlerEvent;
-
-import java.util.function.Consumer;
-
-public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent<R, T>> {
+public class NetworkServer {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -16,9 +8,6 @@ public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent
     /* **************************************************************************************
      *  Variable <Protected>
      */
-    protected final TcpChannel tcpChannel;
-
-    protected CompletionHandlerEvent<R, T> completionHandlerEvent;
 
     /* **************************************************************************************
      *  Variable <Private>
@@ -27,7 +16,6 @@ public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent
     /* **************************************************************************************
      *  Abstract method <Public>
      */
-    public abstract R getResult();
 
     /* **************************************************************************************
      *  Abstract method <Protected>
@@ -36,9 +24,6 @@ public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent
     /* **************************************************************************************
      *  Construct Method
      */
-    protected Handshake(TcpChannel tcpChannel){
-        this.tcpChannel = tcpChannel;
-    }
 
     /* **************************************************************************************
      *  Public Method
@@ -55,33 +40,6 @@ public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent
     /* **************************************************************************************
      *  Protected Method
      */
-    protected void executeFail(Throwable throwable, T attachment){
-        CompletionHandlerEvent<R, T> cache = this.completionHandlerEvent;
-        this.completionHandlerEvent = null;
-        try {
-            cache.failed(throwable, attachment);
-        }catch (Throwable ignore){}
-    }
-
-    protected void executeCompleted(R result, T attachment){
-        CompletionHandlerEvent<R, T> cache = this.completionHandlerEvent;
-        this.completionHandlerEvent = null;
-        try {
-            cache.completed(result, attachment);
-        }catch (Throwable ignore){}
-    }
-
-    protected boolean mutex(CompletionHandlerEvent<R, T> completionHandlerEvent, T attachment){
-        if(this.completionHandlerEvent!=null){
-            try{
-                completionHandlerEvent.failed(new NetworkException(NetworkExceptionList.ILLEGAL_ACCESS), attachment);
-            }catch (Throwable ignore){}
-            return false;
-        }
-
-        this.completionHandlerEvent = completionHandlerEvent;
-        return true;
-    }
 
     /* **************************************************************************************
      *  Protected Method <Override>
@@ -102,7 +60,4 @@ public abstract class Handshake<R, T> implements Consumer<CompletionHandlerEvent
     /* **************************************************************************************
      *  Private Method <Static>
      */
-
-
-
 }

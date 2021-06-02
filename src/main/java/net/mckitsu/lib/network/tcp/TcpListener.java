@@ -1,55 +1,72 @@
 package net.mckitsu.lib.network.tcp;
 
-import net.mckitsu.lib.util.event.CompletionHandlerEvent;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.CompletionHandler;
 
-/**
- * TCP Asynchronous Server.
- *
- * @author  ZxyKira
- */
-public abstract class TcpListener {
-    protected AsynchronousServerSocketChannel serverChannel;
-    private final CompletionHandlerEvent<AsynchronousSocketChannel, Object> chEventAccept;
+public class TcpListener implements CompletionHandler<AsynchronousSocketChannel, Object>{
+    /* **************************************************************************************
+     *  Variable <Public>
+     */
+    private CompletionHandler<TcpChannel, Void> handlerAccept;
+
+
 
     /* **************************************************************************************
-     *  Abstract method
+     *  Variable <Protected>
+     */
+    protected AsynchronousServerSocketChannel serverChannel;
+
+
+
+    /* **************************************************************************************
+     *  Variable <Private>
      */
 
-    /**
-     * 服務端啟動失敗後調用此方法
-     *
+    /* **************************************************************************************
+     *  Abstract method <Public>
      */
-    public abstract void onOpenFail(Throwable e);
+    /*----------------------------------------
+     *  completed
+     *----------------------------------------*/
+    @Override
+    public void completed(AsynchronousSocketChannel result, Object attachment) {
+        this.serverChannel.accept(null, this);
+        this.handlerAccept.completed(new TcpChannel(result), null);
+    }
 
-    /**
-     * 服務端接受客戶端成功後調用此方法，建議依下列方法使用客戶端.
-     *
-     * @param tcpChannel 已連線的TcpChannel
+
+
+    /*----------------------------------------
+     *  failed
+     *----------------------------------------*/
+    @Override
+    public void failed(Throwable exc, Object attachment) {
+        this.handlerAccept.failed(exc, null);
+    }
+
+    /* **************************************************************************************
+     *  Abstract method <Protected>
      */
-    public abstract void onAccept(TcpChannel tcpChannel);
 
     /* **************************************************************************************
      *  Construct method
      */
-
     public TcpListener() {
-        this.chEventAccept = new CompletionHandlerEvent<>(this::handleAccept, this::handleAcceptFail);
     }
 
-    /* **************************************************************************************
-     *  Override method
-     */
+
 
     /* **************************************************************************************
-     *  Public method
+     *  Public Method
      */
 
+    /*----------------------------------------
+     *  isStart
+     *----------------------------------------*/
     public boolean isStart(){
         try {
             return this.serverChannel.getLocalAddress() != null;
@@ -58,37 +75,40 @@ public abstract class TcpListener {
         }
     }
 
-    /**
-     * 開始監聽Socket TCP
-     *
-     */
-    public void start(InetSocketAddress hostAddress){
+
+
+    /*----------------------------------------
+     *  start
+     *----------------------------------------*/
+    public void start(InetSocketAddress hostAddress, CompletionHandler<TcpChannel, Void> handler){
         if(!isStart()){
             try {
+                this.handlerAccept = handler;
                 this.serverChannel = AsynchronousServerSocketChannel.open();
                 this.serverChannel.bind(hostAddress);
-                this.serverChannel.accept(null, chEventAccept);
+                this.serverChannel.accept(null, this);
             } catch (IOException e) {
-                this.onOpenFail(e);
+                handler.failed(e, null);
             }
         }
     }
 
-    /**
-     * 停止監聽Socket TCP
-     *
-     */
+
+
+    /*----------------------------------------
+     *  stop
+     *----------------------------------------*/
     public void stop(){
         try {
             this.serverChannel.close();
         } catch (IOException|NullPointerException ignore){}
     }
 
-    /**
-     * 取得本地監聽的SocketAddress
-     *
-     * @return SocketAddress
-     */
+
+
+    /*----------------------------------------
+     *  getLocalAddress
+     *----------------------------------------*/
     public SocketAddress getLocalAddress() {
         try {
             return this.serverChannel.getLocalAddress();
@@ -97,25 +117,41 @@ public abstract class TcpListener {
         }
     }
 
+
+
+    /* **************************************************************************************
+     *  Public Method <Override>
+     */
+
+    /* **************************************************************************************
+     *  Public Method <Static>
+     */
+
     /* **************************************************************************************
      *  protected method
      */
 
-    protected void accept(){
-        this.serverChannel.accept(null, this.chEventAccept);
-    }
-
     /* **************************************************************************************
      *  private method
      */
-    private void handleAccept(AsynchronousSocketChannel result, Object attachment){
-        if(this.isStart()){
-            this.accept();
-            this.onAccept(new TcpChannel(result));
-        }
-    }
 
-    private void handleAcceptFail(Throwable exc, Object attachment){
-    }
+    /* **************************************************************************************
+     *  Protected Method <Override>
+     */
+
+    /* **************************************************************************************
+     *  Protected Method <Static>
+     */
+
+    /* **************************************************************************************
+     *  Private Method
+     */
+
+    /* **************************************************************************************
+     *  Private Method <Override>
+     */
+
+    /* **************************************************************************************
+     *  Private Method <Static>
+     */
 }
-
