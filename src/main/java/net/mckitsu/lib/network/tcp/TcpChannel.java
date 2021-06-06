@@ -59,7 +59,9 @@ public class TcpChannel {
             try {
                 this.channel = AsynchronousSocketChannel.open();
             } catch (IOException e) {
-                handler.failed(e, attachment);
+                try{
+                    handler.failed(e, attachment);
+                }catch (Throwable ignore){}
                 return;
             }
         }
@@ -68,7 +70,10 @@ public class TcpChannel {
             try {
                 this.channel = AsynchronousSocketChannel.open();
             } catch (IOException e) {
-                handler.failed(e, attachment);
+                try{
+                    handler.failed(e, attachment);
+                }catch (Throwable ignore){}
+
                 return;
             }
         }

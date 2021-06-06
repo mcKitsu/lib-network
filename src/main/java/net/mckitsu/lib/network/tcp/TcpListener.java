@@ -7,11 +7,11 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 
-public class TcpListener implements CompletionHandler<AsynchronousSocketChannel, Object>{
+public class TcpListener{
     /* **************************************************************************************
      *  Variable <Public>
      */
-    private CompletionHandler<TcpChannel, Void> handlerAccept;
+
 
 
 
@@ -25,28 +25,14 @@ public class TcpListener implements CompletionHandler<AsynchronousSocketChannel,
     /* **************************************************************************************
      *  Variable <Private>
      */
+    private CompletionHandler<TcpChannel, Void> handlerAccept;
+    private final CompletionHandler<AsynchronousSocketChannel, Object> channelAccept;
+
+
 
     /* **************************************************************************************
      *  Abstract method <Public>
      */
-    /*----------------------------------------
-     *  completed
-     *----------------------------------------*/
-    @Override
-    public void completed(AsynchronousSocketChannel result, Object attachment) {
-        this.serverChannel.accept(null, this);
-        this.handlerAccept.completed(new TcpChannel(result), null);
-    }
-
-
-
-    /*----------------------------------------
-     *  failed
-     *----------------------------------------*/
-    @Override
-    public void failed(Throwable exc, Object attachment) {
-        this.handlerAccept.failed(exc, null);
-    }
 
     /* **************************************************************************************
      *  Abstract method <Protected>
@@ -56,6 +42,7 @@ public class TcpListener implements CompletionHandler<AsynchronousSocketChannel,
      *  Construct method
      */
     public TcpListener() {
+        this.channelAccept = this.constructChannelAccept();
     }
 
 
@@ -82,13 +69,15 @@ public class TcpListener implements CompletionHandler<AsynchronousSocketChannel,
      *----------------------------------------*/
     public void start(InetSocketAddress hostAddress, CompletionHandler<TcpChannel, Void> handler){
         if(!isStart()){
+            this.handlerAccept = handler;
             try {
-                this.handlerAccept = handler;
                 this.serverChannel = AsynchronousServerSocketChannel.open();
                 this.serverChannel.bind(hostAddress);
-                this.serverChannel.accept(null, this);
+                this.serverChannel.accept(null, this.channelAccept);
             } catch (IOException e) {
-                handler.failed(e, null);
+                try{
+                    handler.failed(e, null);
+                }catch (Throwable ignore){}
             }
         }
     }
@@ -146,6 +135,25 @@ public class TcpListener implements CompletionHandler<AsynchronousSocketChannel,
     /* **************************************************************************************
      *  Private Method
      */
+    /*----------------------------------------
+     *  constructChannelAccept
+     *----------------------------------------*/
+    private CompletionHandler<AsynchronousSocketChannel, Object> constructChannelAccept(){
+        return new CompletionHandler<AsynchronousSocketChannel, Object>() {
+            @Override
+            public void completed(AsynchronousSocketChannel result, Object attachment) {
+                TcpListener.this.serverChannel.accept(null, this);
+                TcpListener.this.handlerAccept.completed(new TcpChannel(result), null);
+            }
+
+            @Override
+            public void failed(Throwable exc, Object attachment) {
+
+            }
+        };
+    }
+
+
 
     /* **************************************************************************************
      *  Private Method <Override>

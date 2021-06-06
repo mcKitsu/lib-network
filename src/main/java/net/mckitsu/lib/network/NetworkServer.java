@@ -1,6 +1,12 @@
 package net.mckitsu.lib.network;
 
-public class NetworkServer {
+import net.mckitsu.lib.network.tcp.TcpChannel;
+import net.mckitsu.lib.network.tcp.TcpListener;
+
+import java.net.InetSocketAddress;
+import java.nio.channels.CompletionHandler;
+
+public class NetworkServer extends TcpListener {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -32,7 +38,13 @@ public class NetworkServer {
     /* **************************************************************************************
      *  Public Method <Override>
      */
+    @Override
+    public void start(InetSocketAddress hostAddress, CompletionHandler<TcpChannel, Void> handler){
 
+
+
+        super.start(hostAddress, handler);
+    }
     /* **************************************************************************************
      *  Public Method <Static>
      */
