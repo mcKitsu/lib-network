@@ -1,12 +1,12 @@
 package net.mckitsu.lib.network;
 
-import net.mckitsu.lib.network.tcp.TcpChannel;
+import net.mckitsu.lib.network.util.EncryptAes;
 
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 
-public class Network extends TcpChannel{
+public abstract class Network{
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -18,6 +18,12 @@ public class Network extends TcpChannel{
     /* **************************************************************************************
      *  Variable <Private>
      */
+    private final boolean isMaster;
+    private final TcpChannel tcpChannel;
+    private final Handshake networkHandshake;
+    private EncryptAes encryptAES;
+
+
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -26,19 +32,39 @@ public class Network extends TcpChannel{
     /* **************************************************************************************
      *  Abstract method <Protected>
      */
+    protected abstract void onConnect();
+    protected abstract void onDisconnect();
+    protected abstract void onConnectFail();
+    protected abstract void onSlotOpen(NetworkSlot networkSlot);
 
     /* **************************************************************************************
      *  Construct Method
      */
 
-    protected Network(AsynchronousSocketChannel asynchronousSocketChannel){
-        super(asynchronousSocketChannel);
+    public Network(TcpChannel tcpChannel){
+        this.isMaster = true;
+        this.tcpChannel = tcpChannel;
+        this.networkHandshake = new HandshakeMaster();
+        CompletionHandler<EncryptAes, Void> handler = new CompletionHandler<EncryptAes, Void>() {
+            @Override
+            public void completed(EncryptAes result, Void attachment) {
+                System.out.println("successful");
+            }
 
+            @Override
+            public void failed(Throwable exc, Void attachment) {
+                System.out.println("fail");
+            }
+        };
+        this.networkHandshake.action(this, handler);
     }
 
     public Network(){
-
+        this.isMaster = false;
+        this.tcpChannel = new TcpChannel();
+        this.networkHandshake = new HandshakeSlave();
     }
+
 
 
 
@@ -53,9 +79,45 @@ public class Network extends TcpChannel{
     /*----------------------------------------
      *  connect
      *----------------------------------------*/
-    @Override
-    public <A> void connect(SocketAddress remoteAddress, A attachment, CompletionHandler<Void,? super A> handler){
-        super.connect(remoteAddress, attachment, handler);
+    public void connect(SocketAddress remoteAddress){
+        if(isMaster)
+            return;
+
+        if(this.tcpChannel.isConnect())
+            return;
+
+        CompletionHandler<Void, Object> handler = new CompletionHandler<Void, Object>() {
+            @Override
+            public void completed(Void result, Object attachment) {
+                CompletionHandler<EncryptAes, Void> handler = new CompletionHandler<EncryptAes, Void>() {
+                    @Override
+                    public void completed(EncryptAes result, Void attachment) {
+                        Network.this.encryptAES = result;
+                        try {
+                            Network.this.onConnect();
+                        }catch (Throwable ignore){}
+                    }
+
+                    @Override
+                    public void failed(Throwable exc, Void attachment) {
+                        try{
+                            Network.this.onConnectFail();
+                        }catch (Throwable ignore){}
+                    }
+                };
+
+                Network.this.networkHandshake.action(Network.this, handler);
+            }
+
+            @Override
+            public void failed(Throwable exc, Object attachment) {
+                try {
+                    Network.this.onConnectFail();
+                }catch (Throwable ignore){}
+            }
+        };
+
+        this.tcpChannel.connect(remoteAddress, null, handler);
     }
 
 
@@ -63,9 +125,13 @@ public class Network extends TcpChannel{
     /*----------------------------------------
      *  close
      *----------------------------------------*/
-    @Override
-    public void close(){
-        super.close();
+    public void disconnect(){
+        synchronized (this.tcpChannel){
+            if(this.tcpChannel.isConnect()){
+                this.tcpChannel.close();
+                this.onDisconnect();
+            }
+        }
     }
 
 
@@ -73,8 +139,8 @@ public class Network extends TcpChannel{
     /*----------------------------------------
      *  close
      *----------------------------------------*/
-    public NetworkSlot openSlot(){
-        return new NetworkSlot();
+    public NetworkSlot openSlot(NetworkSlotEvent networkSlotEvent){
+        return new NetworkSlot(networkSlotEvent);
     }
 
     /* **************************************************************************************
@@ -84,7 +150,24 @@ public class Network extends TcpChannel{
     /* **************************************************************************************
      *  Protected Method
      */
+    /*----------------------------------------
+     *  directWrite
+     *----------------------------------------*/
+    protected  <A> void directWrite(ByteBuffer byteBuffer, A attachment, CompletionHandler<Integer, A> handler){
+        this.tcpChannel.write(byteBuffer, attachment, handler);
+    }
 
+
+
+    /*----------------------------------------
+     *  directRead
+     *----------------------------------------*/
+    protected <A> void directRead(ByteBuffer byteBuffer, A attachment, CompletionHandler<Integer, A> handler){
+        this.tcpChannel.read(byteBuffer, attachment, handler);
+    }
+
+
+    
     /* **************************************************************************************
      *  Protected Method <Override>
      */
@@ -104,4 +187,6 @@ public class Network extends TcpChannel{
     /* **************************************************************************************
      *  Private Method <Static>
      */
+
+
 }

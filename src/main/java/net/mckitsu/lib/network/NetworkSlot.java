@@ -12,6 +12,8 @@ public class NetworkSlot {
     /* **************************************************************************************
      *  Variable <Private>
      */
+    private final NetworkSlotEvent networkSlotEvent;
+    private boolean isOpen;
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -24,10 +26,26 @@ public class NetworkSlot {
     /* **************************************************************************************
      *  Construct Method
      */
+    protected NetworkSlot(NetworkSlotEvent networkSlotEvent){
+        this.networkSlotEvent = networkSlotEvent;
+        this.isOpen = true;
+    }
 
     /* **************************************************************************************
      *  Public Method
      */
+
+    /*----------------------------------------
+     *  close
+     *----------------------------------------*/
+    public void close(){
+        if(this.isOpen){
+            this.isOpen = false;
+            this.networkSlotEvent.onClose(this);
+        }
+    }
+
+
 
     /* **************************************************************************************
      *  Public Method <Override>

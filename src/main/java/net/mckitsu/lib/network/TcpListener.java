@@ -1,34 +1,24 @@
-package net.mckitsu.lib.network.tcp;
+package net.mckitsu.lib.network;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
+import java.nio.channels.*;
 
-public class TcpListener{
+public abstract class TcpListener implements CompletionHandler<AsynchronousSocketChannel, Void>{
     /* **************************************************************************************
      *  Variable <Public>
      */
 
-
-
-
     /* **************************************************************************************
      *  Variable <Protected>
      */
-    protected AsynchronousServerSocketChannel serverChannel;
-
+    protected AsynchronousServerSocketChannel asynchronousServerSocketChannel;
 
 
     /* **************************************************************************************
      *  Variable <Private>
-     */
-    private CompletionHandler<TcpChannel, Void> handlerAccept;
-    private final CompletionHandler<AsynchronousSocketChannel, Object> channelAccept;
-
-
+     */ 
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -37,14 +27,14 @@ public class TcpListener{
     /* **************************************************************************************
      *  Abstract method <Protected>
      */
+    protected abstract void onAccept(TcpChannel tcpChannel);
+
 
     /* **************************************************************************************
      *  Construct method
      */
     public TcpListener() {
-        this.channelAccept = this.constructChannelAccept();
     }
-
 
 
     /* **************************************************************************************
@@ -54,45 +44,45 @@ public class TcpListener{
     /*----------------------------------------
      *  isStart
      *----------------------------------------*/
-    public boolean isStart(){
+    public boolean isOpen(){
         try {
-            return this.serverChannel.getLocalAddress() != null;
+            return this.asynchronousServerSocketChannel.getLocalAddress() != null;
         } catch (IOException|NullPointerException e) {
             return false;
         }
     }
 
 
-
     /*----------------------------------------
      *  start
      *----------------------------------------*/
-    public void start(InetSocketAddress hostAddress, CompletionHandler<TcpChannel, Void> handler){
-        if(!isStart()){
-            this.handlerAccept = handler;
-            try {
-                this.serverChannel = AsynchronousServerSocketChannel.open();
-                this.serverChannel.bind(hostAddress);
-                this.serverChannel.accept(null, this.channelAccept);
-            } catch (IOException e) {
-                try{
-                    handler.failed(e, null);
-                }catch (Throwable ignore){}
-            }
-        }
-    }
+    public boolean start(InetSocketAddress hostAddress){
+        if(this.isOpen())
+            return false;
 
+        try {
+            this.asynchronousServerSocketChannel = AsynchronousServerSocketChannel.open();
+            this.asynchronousServerSocketChannel.bind(hostAddress);
+            this.accept();
+        } catch (IOException e) {
+            return false;
+        }
+        return true;
+    }
 
 
     /*----------------------------------------
      *  stop
      *----------------------------------------*/
-    public void stop(){
+    public boolean stop(){
         try {
-            this.serverChannel.close();
-        } catch (IOException|NullPointerException ignore){}
+            this.asynchronousServerSocketChannel.close();
+            this.asynchronousServerSocketChannel = null;
+        } catch (IOException|NullPointerException ignore){
+            return false;
+        }
+        return true;
     }
-
 
 
     /*----------------------------------------
@@ -100,17 +90,34 @@ public class TcpListener{
      *----------------------------------------*/
     public SocketAddress getLocalAddress() {
         try {
-            return this.serverChannel.getLocalAddress();
+            return this.asynchronousServerSocketChannel.getLocalAddress();
         } catch (IOException|NullPointerException e) {
             return null ;
         }
     }
 
 
-
     /* **************************************************************************************
      *  Public Method <Override>
      */
+    /*----------------------------------------
+     *  completed
+     *----------------------------------------*/
+    @Override
+    public void completed(AsynchronousSocketChannel result, Void attachment) {
+        this.accept();
+        this.onAccept(new TcpChannel(result));
+    }
+
+
+    /*----------------------------------------
+     *  failed
+     *----------------------------------------*/
+    @Override
+    public void failed(Throwable exc, Void attachment) {
+        this.stop();
+    }
+
 
     /* **************************************************************************************
      *  Public Method <Static>
@@ -123,6 +130,15 @@ public class TcpListener{
     /* **************************************************************************************
      *  private method
      */
+    private void accept(){
+        try {
+            this.asynchronousServerSocketChannel.accept(null, this);
+        }catch (NotYetBoundException| ShutdownChannelGroupException|NullPointerException e){
+            java.util.logging.Logger.getGlobal().warning(e.toString());
+            this.stop();
+        }
+    }
+
 
     /* **************************************************************************************
      *  Protected Method <Override>
@@ -135,25 +151,6 @@ public class TcpListener{
     /* **************************************************************************************
      *  Private Method
      */
-    /*----------------------------------------
-     *  constructChannelAccept
-     *----------------------------------------*/
-    private CompletionHandler<AsynchronousSocketChannel, Object> constructChannelAccept(){
-        return new CompletionHandler<AsynchronousSocketChannel, Object>() {
-            @Override
-            public void completed(AsynchronousSocketChannel result, Object attachment) {
-                TcpListener.this.serverChannel.accept(null, this);
-                TcpListener.this.handlerAccept.completed(new TcpChannel(result), null);
-            }
-
-            @Override
-            public void failed(Throwable exc, Object attachment) {
-
-            }
-        };
-    }
-
-
 
     /* **************************************************************************************
      *  Private Method <Override>

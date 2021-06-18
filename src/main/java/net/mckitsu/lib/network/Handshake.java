@@ -1,12 +1,11 @@
 package net.mckitsu.lib.network;
 
-import net.mckitsu.lib.network.tcp.TcpChannel;
-import net.mckitsu.lib.network.tcp.TcpListener;
-
-import java.net.InetSocketAddress;
+import net.mckitsu.lib.network.util.EncryptAes;
+import net.mckitsu.lib.network.util.EncryptRsa;
 import java.nio.channels.CompletionHandler;
 
-public class NetworkServer extends TcpListener {
+
+public abstract class Handshake {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -18,10 +17,15 @@ public class NetworkServer extends TcpListener {
     /* **************************************************************************************
      *  Variable <Private>
      */
+    private EncryptRsa encryptRsa;
+    private EncryptAes encryptAes;
 
     /* **************************************************************************************
      *  Abstract method <Public>
      */
+    public abstract void action(Network network, CompletionHandler<EncryptAes, Void> handler);
+
+
 
     /* **************************************************************************************
      *  Abstract method <Protected>
@@ -30,6 +34,10 @@ public class NetworkServer extends TcpListener {
     /* **************************************************************************************
      *  Construct Method
      */
+    protected Handshake(){
+    }
+
+
 
     /* **************************************************************************************
      *  Public Method
@@ -38,13 +46,7 @@ public class NetworkServer extends TcpListener {
     /* **************************************************************************************
      *  Public Method <Override>
      */
-    @Override
-    public void start(InetSocketAddress hostAddress, CompletionHandler<TcpChannel, Void> handler){
 
-
-
-        super.start(hostAddress, handler);
-    }
     /* **************************************************************************************
      *  Public Method <Static>
      */
@@ -52,6 +54,20 @@ public class NetworkServer extends TcpListener {
     /* **************************************************************************************
      *  Protected Method
      */
+    protected void doCompleted(CompletionHandler<EncryptAes, Void> handler, EncryptAes encryptAes){
+        try {
+            handler.completed(encryptAes, null);
+        }catch (Throwable ignore){}
+    }
+
+
+    protected void doFailed(CompletionHandler<EncryptAes, Void> handler, Throwable e){
+        try {
+            handler.failed(e, null);
+        }catch (Throwable ignore){}
+    }
+
+
 
     /* **************************************************************************************
      *  Protected Method <Override>

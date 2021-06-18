@@ -1,4 +1,4 @@
-package net.mckitsu.lib.network.tcp;
+package net.mckitsu.lib.network;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -34,7 +34,7 @@ public class TcpChannel {
         this.channel = null;
     }
 
-    protected TcpChannel(AsynchronousSocketChannel asynchronousSocketChannel){
+    public TcpChannel(AsynchronousSocketChannel asynchronousSocketChannel){
         this.channel = asynchronousSocketChannel;
     }
 
@@ -98,6 +98,7 @@ public class TcpChannel {
     public boolean isOpen() {
         try {
             return this.channel.isOpen();
+
         }catch (NullPointerException e){
             return false;
         }
