@@ -1,14 +1,10 @@
 package net.mckitsu.lib.network.util;
 
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.X509EncodedKeySpec;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 
-public class EncryptRsa extends Encrypt {
+public class SynchronizeExecute<A> {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -20,6 +16,10 @@ public class EncryptRsa extends Encrypt {
     /* **************************************************************************************
      *  Variable <Private>
      */
+    private final Consumer<A> consumer;
+    private final Queue<A> queue = new ConcurrentLinkedQueue<>();
+    private boolean executing = false;
+
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -32,21 +32,26 @@ public class EncryptRsa extends Encrypt {
     /* **************************************************************************************
      *  Construct Method
      */
-    public EncryptRsa(byte[] key, KeyType keyType) throws NoSuchAlgorithmException, InvalidKeyException, InvalidKeySpecException {
-        this(keyConvert(key, keyType));
-    }
-
-
-    public EncryptRsa(Key key) throws InvalidKeyException, NoSuchAlgorithmException {
-        super(key,Type.RSA);
-        if(!key.getAlgorithm().equalsIgnoreCase(Type.RSA.getInstance()))
-            throw new NoSuchAlgorithmException();
+    public SynchronizeExecute(Consumer<A> consumer){
+        this.consumer = consumer;
     }
 
 
     /* **************************************************************************************
      *  Public Method
      */
+
+    /*----------------------------------------
+     *  execute
+     *----------------------------------------*/
+    public void execute(A attachment){
+        synchronized (this.queue) {
+            this.queue.add(attachment);
+        }
+
+        this.action();
+    }
+
 
     /* **************************************************************************************
      *  Public Method <Override>
@@ -72,6 +77,30 @@ public class EncryptRsa extends Encrypt {
      *  Private Method
      */
 
+    /*----------------------------------------
+     *  action
+     *----------------------------------------*/
+    private void action(){
+        if(this.executing)
+            return;
+
+        while(true){
+            A attachment;
+            synchronized (this.queue){
+                attachment = this.queue.poll();
+            }
+
+            if(attachment == null){
+                this.executing = false;
+                break;
+            }
+
+            try {
+                this.consumer.accept(attachment);
+            }catch (Throwable ignore){}
+        }
+    }
+
     /* **************************************************************************************
      *  Private Method <Override>
      */
@@ -79,28 +108,4 @@ public class EncryptRsa extends Encrypt {
     /* **************************************************************************************
      *  Private Method <Static>
      */
-
-    /*----------------------------------------
-     *  keyConvert
-     *----------------------------------------*/
-    private static Key keyConvert(byte[] key, KeyType keyType) throws NoSuchAlgorithmException, InvalidKeySpecException {
-        KeyFactory kf = KeyFactory.getInstance("RSA"); // or "EC" or whatever
-
-        switch (keyType){
-            case PRIVATE_KEY:
-                return kf.generatePrivate(new PKCS8EncodedKeySpec(key));
-            case PUBLIC_KEY:
-                return kf.generatePublic(new X509EncodedKeySpec(key));
-        }
-        return null;
-    }
-
-
-    /* **************************************************************************************
-     *  Public Enum KeyType
-     */
-    public enum KeyType{
-        PRIVATE_KEY,
-        PUBLIC_KEY,
-    }
 }

@@ -1,17 +1,13 @@
-package net.mckitsu.lib.network;
+package net.mckitsu.lib.network.local;
 
 import net.mckitsu.lib.network.util.CompletionHandlerEvent;
 import net.mckitsu.lib.network.util.EncryptAes;
 import net.mckitsu.lib.network.util.EncryptRsa;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
-import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 
 public class HandshakeMaster extends Handshake {
     /* **************************************************************************************
@@ -25,20 +21,11 @@ public class HandshakeMaster extends Handshake {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private final CompletionHandlerEvent<Integer, ByteBuffer> eventWriteRsaPublicKey
+    private final CompletionHandlerEvent<byte[], Void> eventWriteRsaPublicKey
             = new CompletionHandlerEvent<>(this::eventWriteRsaPublicKeyCompleted, this::eventFailed);
 
-    private final CompletionHandlerEvent<Integer, ByteBuffer> eventReadAesKey
+    private final CompletionHandlerEvent<byte[], Void> eventReadAesKey
             = new CompletionHandlerEvent<>(this::eventReadAesKeyCompleted, this::eventFailed);
-
-    private boolean isAction;
-    private EncryptAes encryptAes;
-    private EncryptRsa encryptRsa;
-    private CompletionHandler<EncryptAes, Void> handler;
-    private Network network;
-    private byte[] rsaPublicKey;
-
-
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -51,8 +38,11 @@ public class HandshakeMaster extends Handshake {
     /* **************************************************************************************
      *  Construct Method
      */
-    protected HandshakeMaster(){
-        this.isAction = false;
+    /**
+     * construct.
+     */
+    public HandshakeMaster(){
+        super();
     }
 
     /* **************************************************************************************
@@ -63,28 +53,25 @@ public class HandshakeMaster extends Handshake {
      *  Public Method <Override>
      */
 
-
+    /**
+     * action
+     *
+     * @param tcpClientTransferEncrypt network transfer entity.
+     * @param attachment user attachment.
+     * @param handler compiler handler.
+     * @param <A> user attachment type.
+     */
     @Override
-    public void action(Network network, CompletionHandler<EncryptAes, Void> handler) {
-        if(this.isAction){
-            handler.failed(new IOException("multi action"), null);
-            return;
-        }
+    public <A> void action(TcpClientTransferEncrypt tcpClientTransferEncrypt, A attachment, CompletionHandler<EncryptAes, A> handler) {
+        super.action(tcpClientTransferEncrypt, attachment, handler);
 
         try {
-            this.isAction = true;
-            this.handler = handler;
-            this.network = network;
-
             KeyPair keyPair = generatorRsaKey();
             this.encryptRsa = new EncryptRsa(keyPair.getPrivate());
-            this.rsaPublicKey = keyPair.getPublic().getEncoded();
-
-            ByteBuffer byteBufferRsaPublicKey = ByteBuffer.wrap(this.rsaPublicKey);
-            this.network.directWrite(byteBufferRsaPublicKey, byteBufferRsaPublicKey, this.eventWriteRsaPublicKey);
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            super.tcpClientTransferEncrypt.transferDirectWrite(keyPair.getPublic().getEncoded(), null, this.eventWriteRsaPublicKey);
+        } catch (Throwable exc) {
             this.isAction = false;
-            super.doFailed(handler, e);
+            super.doFailed(exc);
         }
     }
 
@@ -109,29 +96,59 @@ public class HandshakeMaster extends Handshake {
     /* **************************************************************************************
      *  Private Method
      */
+
+    /**
+     * generatorRsaKey
+     *
+     * @return key
+     * @throws NoSuchAlgorithmException KeyPairGenerator not found encrypt format.
+     */
     private KeyPair generatorRsaKey() throws NoSuchAlgorithmException {
         KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA");
         keyPairGenerator.initialize(512);
         return keyPairGenerator.generateKeyPair();
     }
 
-    public void eventWriteRsaPublicKeyCompleted(Integer result, ByteBuffer attachment) {
-        ByteBuffer byteBuffer = ByteBuffer.allocate(16384);
-        this.network.directRead(byteBuffer, byteBuffer, this.eventReadAesKey);
+
+    /**
+     *
+     * @param result write result.
+     * @param attachment user attachment
+     */
+    public void eventWriteRsaPublicKeyCompleted(byte[] result, Void attachment) {
+        try{
+            super.tcpClientTransferEncrypt.transferDirectRead(null, this.eventReadAesKey);
+        }catch (Throwable exc){
+            super.doFailed(exc);
+        }
     }
 
-    public void eventReadAesKeyCompleted(Integer result, ByteBuffer attachment) {
-        attachment.flip();
-        byte[] aesKeyUsingRsaPublicKeyEncrypt = new byte[attachment.remaining()];
-        java.util.logging.Logger.getGlobal().info(Arrays.toString(aesKeyUsingRsaPublicKeyEncrypt));
-        byte[] aesKey = this.encryptRsa.decrypt(aesKeyUsingRsaPublicKeyEncrypt);
-        java.util.logging.Logger.getGlobal().info(Arrays.toString(aesKey));
+
+    /**
+     * eventReadAesKeyCompleted
+     *
+     * @param result read result.
+     * @param attachment user attachment.
+     */
+    public void eventReadAesKeyCompleted(byte[] result, Void attachment) {
+        try{
+            super.doCompleted(new EncryptAes(this.encryptRsa.decrypt(result)));
+        }catch (Throwable exc){
+            super.doFailed(exc);
+        }
     }
 
 
-    public void eventFailed(Throwable exc, ByteBuffer attachment) {
-
+    /**
+     * eventFailed
+     *
+     * @param exc event exception.
+     * @param attachment user attachment.
+     */
+    public void eventFailed(Throwable exc, Void attachment) {
+        super.doFailed(exc);
     }
+
     /* **************************************************************************************
      *  Private Method <Override>
      */

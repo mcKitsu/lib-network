@@ -1,7 +1,8 @@
-package net.mckitsu.lib.network;
+package net.mckitsu.lib.network.local;
 
 import net.mckitsu.lib.network.util.EncryptAes;
 import net.mckitsu.lib.network.util.EncryptRsa;
+
 import java.nio.channels.CompletionHandler;
 
 
@@ -13,18 +14,38 @@ public abstract class Handshake {
     /* **************************************************************************************
      *  Variable <Protected>
      */
+    protected boolean isAction;
+    protected CompletionHandler<EncryptAes, Object> handler;
+    protected Object attachment;
+    protected TcpClientTransferEncrypt tcpClientTransferEncrypt;
+
+    protected EncryptAes encryptAes;
+    protected EncryptRsa encryptRsa;
 
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private EncryptRsa encryptRsa;
-    private EncryptAes encryptAes;
 
     /* **************************************************************************************
      *  Abstract method <Public>
      */
-    public abstract void action(Network network, CompletionHandler<EncryptAes, Void> handler);
 
+    /**
+     *
+     * @param tcpClientTransferEncrypt network transfer entity.
+     * @param attachment user attachment.
+     * @param handler compiler handler.
+     * @param <A> user attachment type.
+     */
+    public <A> void action(TcpClientTransferEncrypt tcpClientTransferEncrypt, A attachment, CompletionHandler<EncryptAes, A> handler){
+        if(this.isAction)
+            throw new IllegalStateException();
+
+        this.isAction = true;
+        this.handler = (CompletionHandler<EncryptAes, Object>) handler;
+        this.attachment = attachment;
+        this.tcpClientTransferEncrypt = tcpClientTransferEncrypt;
+    }
 
 
     /* **************************************************************************************
@@ -34,9 +55,14 @@ public abstract class Handshake {
     /* **************************************************************************************
      *  Construct Method
      */
-    protected Handshake(){
-    }
 
+    /**
+     * construct
+     *
+     */
+    protected Handshake(){
+        this.isAction = false;
+    }
 
 
     /* **************************************************************************************
@@ -54,19 +80,37 @@ public abstract class Handshake {
     /* **************************************************************************************
      *  Protected Method
      */
-    protected void doCompleted(CompletionHandler<EncryptAes, Void> handler, EncryptAes encryptAes){
+
+    /**
+     *
+     * @param encryptAes handshake result.
+     */
+    protected void doCompleted(EncryptAes encryptAes){
+        this.isAction = false;
         try {
-            handler.completed(encryptAes, null);
+            this.handler.completed(encryptAes, this.attachment);
         }catch (Throwable ignore){}
+
+        this.tcpClientTransferEncrypt = null;
+        this.encryptAes = null;
+        this.encryptRsa = null;
     }
 
 
-    protected void doFailed(CompletionHandler<EncryptAes, Void> handler, Throwable e){
+    /**
+     *
+     * @param exc handshake exception
+     */
+    protected void doFailed(Throwable exc){
+        this.isAction = false;
         try {
-            handler.failed(e, null);
+            this.handler.failed(exc, this.attachment);
         }catch (Throwable ignore){}
-    }
 
+        this.tcpClientTransferEncrypt = null;
+        this.encryptAes = null;
+        this.encryptRsa = null;
+    }
 
 
     /* **************************************************************************************
