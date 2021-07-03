@@ -7,9 +7,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.ReadPendingException;
 import java.nio.channels.WritePendingException;
-import java.util.Arrays;
 import java.util.IllformedLocaleException;
-import java.util.logging.Logger;
 import java.util.zip.CRC32;
 
 public abstract class TcpClientTransfer {
@@ -293,7 +291,6 @@ public abstract class TcpClientTransfer {
      *  eventTransferReadHeaderFailed
      *----------------------------------------*/
     private void eventTransferReadHeaderFailed(Throwable exc, ByteBuffer attachment){
-        Logger.getGlobal().info("eventTransferReadHeaderFailed");
         this.transferReadFail(exc);
     }
 
@@ -327,7 +324,6 @@ public abstract class TcpClientTransfer {
      *  eventTransferReadFailed
      *----------------------------------------*/
     private void eventTransferReadFailed(Throwable exc, ByteBuffer attachment){
-        Logger.getGlobal().info("eventTransferReadFailed");
         this.transferReadFail(exc);
     }
 

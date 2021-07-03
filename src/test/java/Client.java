@@ -22,13 +22,15 @@ public class Client {
     }
 
     public void testTcpClient(){
-        TcpClient tcpClient = new TcpClientEntity();
-        tcpClient.connect(new InetSocketAddress("127.0.0.1", 8888));
+        TcpClient tcpClient = new TcpClient();
+        tcpClient.connect(new InetSocketAddress("127.0.0.1", 8888), null, null);
 
         Scanner scanner = new Scanner(System.in);
         while (true){
             try {
-                tcpClient.write(scanner.nextLine().getBytes(StandardCharsets.US_ASCII));
+                byte[] data = scanner.nextLine().getBytes(StandardCharsets.US_ASCII);
+                for(int i=0; i<256; i++)
+                    tcpClient.write(ByteBuffer.allocate(4).putInt(i).array(), null, null);
             }catch (Throwable exc){
                 Logger.getGlobal().warning(exc.toString());
             }

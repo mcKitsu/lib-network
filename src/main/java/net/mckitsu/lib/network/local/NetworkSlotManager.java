@@ -1,6 +1,6 @@
-package net.mckitsu.lib.network;
+package net.mckitsu.lib.network.local;
 
-public class Network extends TcpClient{
+public class NetworkSlotManager {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -12,7 +12,6 @@ public class Network extends TcpClient{
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private TcpClient tcpClient;
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -25,14 +24,6 @@ public class Network extends TcpClient{
     /* **************************************************************************************
      *  Construct Method
      */
-
-    /**
-     *
-     */
-    public Network(){
-
-    }
-
 
     /* **************************************************************************************
      *  Public Method

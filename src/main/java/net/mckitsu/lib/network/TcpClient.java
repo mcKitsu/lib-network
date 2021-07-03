@@ -1,14 +1,11 @@
 package net.mckitsu.lib.network;
 
 import net.mckitsu.lib.network.local.TcpClientTransferEncrypt;
+import net.mckitsu.lib.network.util.AttachmentPacket;
 import net.mckitsu.lib.network.util.CompletionHandlerEvent;
-import net.mckitsu.lib.network.util.SynchronizeExecute;
 
 import java.net.SocketAddress;
 import java.nio.channels.CompletionHandler;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.logging.Logger;
 
 
 /**
@@ -16,7 +13,7 @@ import java.util.logging.Logger;
  *
  * @author  ZxyKira
  */
-public abstract class TcpClient extends TcpClientTransferEncrypt {
+public class TcpClient extends TcpClientTransferEncrypt {
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -28,32 +25,15 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private final CompletionHandler<Void, Void> eventConnect
+    private final CompletionHandler<Void, AttachmentPacket<Void, Object>> eventConnect
             = new CompletionHandlerEvent<>(this::eventConnectCompleted
             , this::eventConnectFailed);
 
-    private final CompletionHandler<byte[], Void> eventRead
-            = new CompletionHandlerEvent<>(this::eventReadCompleted
-            , this::eventReadFailed);
-
-    private final CompletionHandlerEvent<byte[], Void> eventWrite
-            = new CompletionHandlerEvent<>(this::eventWriteCompleted
-            , this::eventWriteFailed);
-
-    private final CompletionHandlerEvent<Void, Void> eventHandshake
+    private final CompletionHandlerEvent<Void, AttachmentPacket<Void, Object>> eventHandshake
             = new CompletionHandlerEvent<>(this::eventHandshakeCompleted
             , this::eventHandshakeFailed);
 
-
     private final TcpChannel tcpChannel;
-    private final Queue<byte[]> writeQueue = new ConcurrentLinkedQueue<>();
-
-    private final SynchronizeExecute<byte[]> readExecute = new SynchronizeExecute<>(this::onRead);
-    private final SynchronizeExecute<byte[]> writeExecute = new SynchronizeExecute<>(this::onWrite);
-
-    private boolean writing = false;
-    private boolean disconnectExecute = true;
-
 
 
     /* **************************************************************************************
@@ -63,13 +43,6 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
     /* **************************************************************************************
      *  Abstract method <Protected>
      */
-    protected abstract void onConnect();
-    protected abstract void onDisconnect();
-    protected abstract void onConnectFail();
-    protected abstract void onRead(byte[] data);
-    protected abstract void onWrite(byte[] data);
-
-
 
     /* **************************************************************************************
      *  Construct Method
@@ -80,10 +53,13 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      *
      * @param tcpChannel TcpChannel
      */
-    public TcpClient(TcpChannel tcpChannel){
+    public <A> TcpClient(TcpChannel tcpChannel, A attachment, CompletionHandler<Void, A> handler){
         this.tcpChannel = tcpChannel;
-        this.startHandshakeMaster(null, this.eventHandshake);
+        AttachmentPacket<Void, A> attachmentPacket = new AttachmentPacket<>(attachment, null, handler);
+
+        this.startHandshakeMaster(attachmentPacket, (CompletionHandler)this.eventHandshake);
     }
+
 
     /**
      * construct.
@@ -106,11 +82,12 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      *
      * @param remoteAddress ip address.
      */
-    public void connect(SocketAddress remoteAddress){
+    public <A> void connect(SocketAddress remoteAddress, A attachment, CompletionHandler<Void, A> handler){
         if(this.tcpChannel.isConnect())
             return;
 
-        this.tcpChannel.connect(remoteAddress, null, this.eventConnect);
+        AttachmentPacket<Void, A> attachmentPacket = new AttachmentPacket<>(attachment, null, handler);
+        this.tcpChannel.connect(remoteAddress, attachmentPacket, (CompletionHandler)this.eventConnect);
     }
 
 
@@ -118,35 +95,34 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      * close
      */
     public void disconnect(){
-        Logger.getGlobal().info("disconnect");
         synchronized (this.tcpChannel){
             if(this.tcpChannel.isConnect()){
                 this.tcpChannel.close();
             }
         }
-
-        this.onDisconnectExecute();
     }
 
 
     /**
-     * write
      *
-     * @param data write data to socket.
+     * @param data write data
+     * @param attachment user attachment
+     * @param handler CompletionHandler
+     * @param <A> user attachment type
      */
-    public void write(byte[] data){
-        if(data == null)
-            throw new NullPointerException();
+    public <A> void write(byte[] data, A attachment, CompletionHandler<byte[], A> handler){
+        super.transferWrite(data, attachment, handler);
+    }
 
-        if(data.length == 0)
-            throw new IllegalArgumentException();
 
-        if(!this.writing){
-            this.writing = true;
-            super.transferWrite(data, null, this.eventWrite);
-        }else {
-            this.writeQueue.add(data);
-        }
+    /**
+     *
+     * @param attachment user attachment
+     * @param handler CompletionHandler
+     * @param <A> user attachment type
+     */
+    public <A> void read(A attachment, CompletionHandler<byte[], A> handler){
+        super.transferRead(attachment, handler);
     }
 
 
@@ -178,35 +154,8 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      */
 
     /* **************************************************************************************
-     *
      *  Private Method
      */
-
-    /**
-     * onConnectExecute.
-     */
-    private void onConnectExecute(){
-        if(tcpChannel.isConnect()){
-            this.disconnectExecute = false;
-            super.transferRead(null, this.eventRead);
-            try{
-                this.onConnect();
-            }catch (Throwable ignore){}
-        }
-    }
-
-    /**
-     * onDisconnectExecute.
-     */
-    private void onDisconnectExecute(){
-        if(!this.disconnectExecute){
-            this.disconnectExecute = true;
-            try{
-                this.onDisconnect();
-            }catch (Throwable ignore){}
-        }
-    }
-
 
     /**
      * eventHandshakeCompleted
@@ -214,8 +163,10 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      * @param result Void
      * @param attachment Void
      */
-    private void eventHandshakeCompleted(Void result, Void attachment){
-        this.onConnectExecute();
+    private void eventHandshakeCompleted(Void result, AttachmentPacket<Void, Object> attachment){
+        try{
+            attachment.handler.completed(null, attachment.attachment);
+        }catch (Throwable ignore){}
     }
 
 
@@ -225,8 +176,10 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      * @param exc Exception
      * @param attachment Void
      */
-    private void eventHandshakeFailed(Throwable exc, Void attachment){
-        this.disconnect();
+    private void eventHandshakeFailed(Throwable exc, AttachmentPacket<Void, Object> attachment){
+        try{
+            attachment.handler.failed(exc, attachment.attachment);
+        }catch (Throwable ignore){}
     }
 
 
@@ -236,8 +189,8 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      * @param result Void
      * @param attachment Void
      */
-    private void eventConnectCompleted(Void result, Void attachment){
-        this.startHandshakeSlave(null, this.eventHandshake);
+    private void eventConnectCompleted(Void result, AttachmentPacket<Void, Object> attachment){
+        this.startHandshakeSlave(attachment, this.eventHandshake);
     }
 
 
@@ -247,65 +200,11 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      * @param exc Exception
      * @param attachment Void
      */
-    private void eventConnectFailed(Throwable exc, Void attachment){
-        try {
-            this.onConnectFail();
+    private void eventConnectFailed(Throwable exc, AttachmentPacket<Void, Object> attachment){
+        try{
+            attachment.handler.failed(exc, attachment.attachment);
         }catch (Throwable ignore){}
     }
-
-
-    /**
-     * eventReadCompleted
-     *
-     * @param data data from socket read.
-     * @param attachment Void
-     */
-    private void eventReadCompleted(byte[] data, Void attachment){
-        super.transferRead(null, this.eventRead);
-        this.readExecute.execute(data);
-    }
-
-
-    /**
-     * eventReadFailed
-     *
-     * @param exc Exception
-     * @param attachment Void
-     */
-    private void eventReadFailed(Throwable exc, Void attachment){
-        this.disconnect();
-    }
-
-
-    /**
-     * eventWriteCompleted
-     *
-     * @param data write
-     * @param attachment Void
-     */
-    private void eventWriteCompleted(byte[] data, Void attachment){
-        synchronized (this.writeQueue){
-            if(!this.writeQueue.isEmpty()){
-                super.transferWrite(this.writeQueue.poll(), null, this.eventWrite);
-            }else{
-                this.writing = false;
-            }
-        }
-
-        this.writeExecute.execute(data);
-    }
-
-
-    /**
-     * eventWriteFailed
-     *
-     * @param exc Exception
-     * @param attachment Void
-     */
-    private void eventWriteFailed(Throwable exc, Void attachment){
-        this.disconnect();
-    }
-
 
     /* **************************************************************************************
      *  Private Method <Override>
@@ -315,5 +214,7 @@ public abstract class TcpClient extends TcpClientTransferEncrypt {
      *  Private Method <Static>
      */
 
-
+    /* **************************************************************************************
+     *  Class/Interface/Enum
+     */
 }

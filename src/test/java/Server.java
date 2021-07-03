@@ -24,7 +24,7 @@ public class Server {
             @Override
             protected void onAccept(TcpChannel tcpChannel) {
                 Logger.getGlobal().info("onAccept: " + tcpChannel.getRemoteAddress());
-                tcpClient = new TcpClientEntity(tcpChannel);
+                tcpClient = new TcpClient(tcpChannel, null, null);
             }
         };
         tcpListener.start(new InetSocketAddress("127.0.0.1", 8888));
@@ -33,8 +33,7 @@ public class Server {
         while (true){
             try {
                 byte data[] = scanner.nextLine().getBytes(StandardCharsets.US_ASCII);
-                tcpClient.write(data);
-                tcpClient.disconnect();
+                tcpClient.write(data, null, null);
             }catch (Throwable exc){
                 Logger.getGlobal().warning(exc.toString());
             }

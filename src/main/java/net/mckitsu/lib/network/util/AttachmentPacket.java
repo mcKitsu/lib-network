@@ -1,9 +1,15 @@
-package net.mckitsu.lib.network;
+package net.mckitsu.lib.network.util;
 
-public class Network extends TcpClient{
+import java.nio.channels.CompletionHandler;
+
+public class AttachmentPacket<V, A> {
     /* **************************************************************************************
      *  Variable <Public>
      */
+    public final CompletionHandler<V, A> handler;
+    public final A attachment;
+    public final V result;
+
 
     /* **************************************************************************************
      *  Variable <Protected>
@@ -12,7 +18,6 @@ public class Network extends TcpClient{
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private TcpClient tcpClient;
 
     /* **************************************************************************************
      *  Abstract method <Public>
@@ -27,12 +32,17 @@ public class Network extends TcpClient{
      */
 
     /**
+     * construct
      *
+     * @param attachment Attachment
+     * @param result Result
+     * @param handler Handler
      */
-    public Network(){
-
+    public AttachmentPacket(A attachment, V result, CompletionHandler<V, A> handler){
+        this.handler =handler;
+        this.attachment = attachment;
+        this.result = result;
     }
-
 
     /* **************************************************************************************
      *  Public Method
@@ -69,4 +79,5 @@ public class Network extends TcpClient{
     /* **************************************************************************************
      *  Private Method <Static>
      */
+
 }

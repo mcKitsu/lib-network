@@ -1,10 +1,10 @@
 package net.mckitsu.lib.network.local;
 
+import net.mckitsu.lib.network.util.AttachmentPacket;
 import net.mckitsu.lib.network.util.CompletionHandlerEvent;
 import net.mckitsu.lib.network.util.EncryptAes;
 
 import java.nio.channels.CompletionHandler;
-import java.util.logging.Logger;
 
 public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
     /* **************************************************************************************
@@ -18,15 +18,15 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private final CompletionHandler<byte[], Attachment<byte[], Object>> eventTransferEncryptRead
+    private final CompletionHandler<byte[], AttachmentPacket<byte[], Object>> eventTransferEncryptRead
             = new CompletionHandlerEvent<>(this::eventTransferEncryptReadCompletion
             , this::eventTransferEncryptReadFailed);
 
-    private final CompletionHandler<byte[], Attachment<byte[], Object>> eventTransferEncryptWrite
+    private final CompletionHandler<byte[], AttachmentPacket<byte[], Object>> eventTransferEncryptWrite
             = new CompletionHandlerEvent<>(this::eventTransferEncryptWriteCompletion
             , this::eventTransferEncryptWriteFailed);
 
-    private final CompletionHandler<EncryptAes, Attachment<Object, Object>> eventHandshake
+    private final CompletionHandler<EncryptAes, AttachmentPacket<Object, Object>> eventHandshake
             = new CompletionHandlerEvent<>(this::eventHandshakeCompletion
             , this::eventHandshakeFailed);
 
@@ -71,7 +71,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
         this.handshaking = true;
         Handshake handshake = new HandshakeMaster();
         handshake.action(this
-                , new Attachment<>(handler, attachment, null)
+                , new AttachmentPacket<>(handler, attachment, null)
                 , (CompletionHandler)this.eventHandshake);
     }
 
@@ -86,7 +86,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
         this.handshaking = true;
         Handshake handshake = new HandshakeSlave();
         handshake.action(this
-                , new Attachment<>(handler, attachment, null)
+                , new AttachmentPacket<>(handler, attachment, null)
                 , (CompletionHandler)this.eventHandshake);
     }
 
@@ -127,7 +127,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      */
     @Override
     protected <A> void transferRead(A attachment, CompletionHandler<byte[], A> handler){
-        Attachment<byte[], Object> att = new Attachment<>((CompletionHandler<byte[], Object>) handler, attachment, null);
+        AttachmentPacket<byte[], Object> att = new AttachmentPacket<>(attachment, null, (CompletionHandler)handler);
         super.transferRead(att, this.eventTransferEncryptRead);
     }
 
@@ -143,7 +143,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
     protected <A> void transferWrite(byte[] data, A attachment, CompletionHandler<byte[], A> handler){
         try {
             byte[] encryptData = encryptAes.encrypt(data);
-            Attachment<byte[], Object> att = new Attachment<>((CompletionHandler<byte[], Object>) handler, attachment, data);
+            AttachmentPacket<byte[], Object> att = new AttachmentPacket<>(attachment, data, (CompletionHandler)handler);
             super.transferWrite(encryptData, att, this.eventTransferEncryptWrite);
         } catch (Throwable exc) {
             handler.failed(exc, attachment);
@@ -164,7 +164,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param encryptAes encrypt aes entity
      * @param attachment user attachment
      */
-    private void eventHandshakeCompletion(EncryptAes encryptAes, Attachment<Object, Object> attachment){
+    private void eventHandshakeCompletion(EncryptAes encryptAes, AttachmentPacket<Object, Object> attachment){
         this.handshaking = false;
         this.encryptAes = encryptAes;
 
@@ -180,7 +180,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param exc Exception
      * @param attachment user attachment
      */
-    private void eventHandshakeFailed(Throwable exc, Attachment<Object, Object> attachment){
+    private void eventHandshakeFailed(Throwable exc, AttachmentPacket<Object, Object> attachment){
         this.handshaking = false;
 
         try{
@@ -195,7 +195,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param result byte array.
      * @param attachment user attachment.
      */
-    private void eventTransferEncryptReadCompletion(byte[] result, Attachment<byte[], Object> attachment){
+    private void eventTransferEncryptReadCompletion(byte[] result, AttachmentPacket<byte[], Object> attachment){
         try{
             byte[] data = this.encryptAes.decrypt(result);
             try{
@@ -213,7 +213,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param exc Exception
      * @param attachment user attachment
      */
-    private void eventTransferEncryptReadFailed(Throwable exc, Attachment<byte[], Object> attachment){
+    private void eventTransferEncryptReadFailed(Throwable exc, AttachmentPacket<byte[], Object> attachment){
         try{
             attachment.handler.failed(exc, attachment.attachment);
         }catch (Throwable ignore){}
@@ -226,9 +226,9 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param data byte[]
      * @param attachment user attachment
      */
-    private void eventTransferEncryptWriteCompletion(byte[] data, Attachment<byte[], Object> attachment){
+    private void eventTransferEncryptWriteCompletion(byte[] data, AttachmentPacket<byte[], Object> attachment){
         try {
-            attachment.handler.completed(attachment.data, attachment.attachment);
+            attachment.handler.completed(attachment.result, attachment.attachment);
         }catch (Throwable ignore){}
     }
 
@@ -239,7 +239,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
      * @param exc Exception
      * @param attachment user attachment
      */
-    private void eventTransferEncryptWriteFailed(Throwable exc, Attachment<byte[], Object> attachment){
+    private void eventTransferEncryptWriteFailed(Throwable exc, AttachmentPacket<byte[], Object> attachment){
         try {
             attachment.handler.failed(exc, attachment.attachment);
         }catch (Throwable ignore){}
@@ -253,16 +253,4 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
     /* **************************************************************************************
      *  Private Method <Static>
      */
-
-    protected static class Attachment<V, A>{
-        public final CompletionHandler<V, A> handler;
-        public final A attachment;
-        public final V data;
-
-        public Attachment(CompletionHandler<V, A> handler, A attachment, V data){
-            this.handler =handler;
-            this.attachment = attachment;
-            this.data = data;
-        }
-    }
 }

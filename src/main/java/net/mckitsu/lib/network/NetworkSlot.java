@@ -12,7 +12,6 @@ public class NetworkSlot {
     /* **************************************************************************************
      *  Variable <Private>
      */
-    private final NetworkSlotEvent networkSlotEvent;
     private boolean isOpen;
 
     /* **************************************************************************************
@@ -26,8 +25,7 @@ public class NetworkSlot {
     /* **************************************************************************************
      *  Construct Method
      */
-    protected NetworkSlot(NetworkSlotEvent networkSlotEvent){
-        this.networkSlotEvent = networkSlotEvent;
+    protected NetworkSlot(){
         this.isOpen = true;
     }
 
@@ -35,13 +33,31 @@ public class NetworkSlot {
      *  Public Method
      */
 
+    /**
+     *
+     * @return
+     */
+    public byte[] read(){
+
+        return new byte[0];
+    }
+
+
+    /**
+     *
+     * @param data
+     */
+    public void write(byte[] data){
+
+    }
+
     /*----------------------------------------
      *  close
      *----------------------------------------*/
     public void close(){
         if(this.isOpen){
             this.isOpen = false;
-            this.networkSlotEvent.onClose(this);
+
         }
     }
 

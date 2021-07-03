@@ -32,6 +32,10 @@ public class TcpClientPacketHeader {
     /* **************************************************************************************
      *  Construct Method
      */
+
+    /**
+     * Construct
+     */
     public TcpClientPacketHeader(){
         this.array = new byte[12];
         this.byteBuffer = ByteBuffer.wrap(this.array);
@@ -39,25 +43,30 @@ public class TcpClientPacketHeader {
     }
 
 
+    /**
+     * Construct
+     */
     public TcpClientPacketHeader(int number, int checksum, int length){
         this();
         this.bufferWrite(number, checksum, length);
     }
 
 
+    /**
+     * Construct
+     */
     public TcpClientPacketHeader(byte[] data){
         this.array = Arrays.copyOf(data, 12);
         this.byteBuffer = ByteBuffer.wrap(this.array);
     }
 
-
     /* **************************************************************************************
      *  Public Method
      */
 
-    /*----------------------------------------
-     *  clear
-     *----------------------------------------*/
+    /**
+     * clear
+     */
     public void clear(){
         this.length = 0;
         this.number = 0;
@@ -66,9 +75,11 @@ public class TcpClientPacketHeader {
     }
 
 
-    /*----------------------------------------
-     *  setData
-     *----------------------------------------*/
+    /**
+     * setArray
+     *
+     * @param data input
+     */
     public void setArray(byte[] data){
         try {
             ByteBuffer b = ByteBuffer.wrap(data);
@@ -82,78 +93,100 @@ public class TcpClientPacketHeader {
     }
 
 
-    /*----------------------------------------
-     *  setLength
-     *----------------------------------------*/
+    /**
+     * setLength
+     *
+     * @param length data
+     */
     public void setLength(int length){
         this.bufferWrite(this.number, this.checksum, length);
     }
 
 
-    /*----------------------------------------
-     *  setNumber
-     *----------------------------------------*/
+    /**
+     * setNumber
+     *
+     * @param number data
+     */
     public void setNumber(int number){
         this.bufferWrite(number, this.checksum, this.length);
     }
 
 
-    /*----------------------------------------
-     *  setNumber
-     *----------------------------------------*/
+    /**
+     * setChecksum
+     *
+     * @param checksum data
+     */
     public void setChecksum(int checksum){
         this.bufferWrite(this.number, checksum,this.length);
     }
 
 
-    /*----------------------------------------
-     *  setAll
-     *----------------------------------------*/
+    /**
+     * setAll
+     *
+     * @param number data
+     * @param checksum data
+     * @param length data
+     */
     public void setAll(int number, int checksum, int length){
         this.bufferWrite(number, checksum, length);
     }
 
 
-    /*----------------------------------------
-     *  getNumber
-     *----------------------------------------*/
+    /**
+     * getNumber
+     *
+     * @return number
+     */
     public int getNumber(){
         return this.number;
     }
 
 
-    /*----------------------------------------
-     *  getLength
-     *----------------------------------------*/
+    /**
+     * getLength
+     *
+     * @return length
+     */
     public int getLength(){
         return this.length;
     }
 
 
-    /*----------------------------------------
-     *  getChecksum
-     *----------------------------------------*/
+    /**
+     * getChecksum
+     *
+     * @return checksum
+     */
     public int getChecksum(){
         return this.checksum;
     }
 
 
-    /*----------------------------------------
-     *  array
-     *----------------------------------------*/
+    /**
+     * array
+     *
+     * @return data array
+     */
     public byte[] array(){
         return this.array;
     }
 
-
     /* **************************************************************************************
      *  Public Method <Override>
+     */
+
+    /**
+     * toString
+     *
+     * @return String
      */
     @Override
     public String toString(){
         return String.format("PacketHeader[number=%d length=%d checksum=%d]", this.number, this.length, this.checksum);
     }
-
 
     /* **************************************************************************************
      *  Public Method <Static>
@@ -174,9 +207,14 @@ public class TcpClientPacketHeader {
     /* **************************************************************************************
      *  Private Method
      */
-    /*----------------------------------------
-     *  bufferWrite
-     *----------------------------------------*/
+
+    /**
+     * bufferWrite
+     *
+     * @param number number
+     * @param checksum checksum
+     * @param length length
+     */
     private void bufferWrite(int number, int checksum, int length){
         this.byteBuffer.clear();
         this.number = number;
@@ -186,7 +224,6 @@ public class TcpClientPacketHeader {
         this.byteBuffer.putInt(checksum);
         this.byteBuffer.putInt(length);
     }
-
 
     /* **************************************************************************************
      *  Private Method <Override>
