@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.*;
+import java.util.function.Consumer;
 
-public abstract class TcpListener implements CompletionHandler<AsynchronousSocketChannel, Void>{
+public class TcpListener implements CompletionHandler<AsynchronousSocketChannel, Void>{
     /* **************************************************************************************
      *  Variable <Public>
      */
@@ -23,12 +24,11 @@ public abstract class TcpListener implements CompletionHandler<AsynchronousSocke
     /* **************************************************************************************
      *  Abstract method <Public>
      */
+    private Consumer onAccept;
 
     /* **************************************************************************************
      *  Abstract method <Protected>
      */
-    protected abstract void onAccept(TcpChannel tcpChannel);
-
 
     /* **************************************************************************************
      *  Construct method
@@ -56,13 +56,14 @@ public abstract class TcpListener implements CompletionHandler<AsynchronousSocke
     /*----------------------------------------
      *  start
      *----------------------------------------*/
-    public boolean start(InetSocketAddress hostAddress){
+    public boolean start(InetSocketAddress hostAddress, Consumer<TcpChannel> completion){
         if(this.isOpen())
             return false;
 
         try {
             this.asynchronousServerSocketChannel = AsynchronousServerSocketChannel.open();
             this.asynchronousServerSocketChannel.bind(hostAddress);
+            this.onAccept = completion;
             this.accept();
         } catch (IOException e) {
             return false;
@@ -106,7 +107,7 @@ public abstract class TcpListener implements CompletionHandler<AsynchronousSocke
     @Override
     public void completed(AsynchronousSocketChannel result, Void attachment) {
         this.accept();
-        this.onAccept(new TcpChannel(result));
+        this.onAccept.accept(new TcpChannel(result));
     }
 
 

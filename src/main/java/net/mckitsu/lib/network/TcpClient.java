@@ -5,7 +5,10 @@ import net.mckitsu.lib.network.util.AttachmentPacket;
 import net.mckitsu.lib.network.util.CompletionHandlerEvent;
 
 import java.net.SocketAddress;
+import java.nio.channels.AlreadyConnectedException;
 import java.nio.channels.CompletionHandler;
+import java.nio.channels.ConnectionPendingException;
+import java.nio.channels.ShutdownChannelGroupException;
 
 
 /**
@@ -33,7 +36,7 @@ public class TcpClient extends TcpClientTransferEncrypt {
             = new CompletionHandlerEvent<>(this::eventHandshakeCompleted
             , this::eventHandshakeFailed);
 
-    private final TcpChannel tcpChannel;
+    private TcpChannel tcpChannel;
 
 
     /* **************************************************************************************
@@ -47,25 +50,11 @@ public class TcpClient extends TcpClientTransferEncrypt {
     /* **************************************************************************************
      *  Construct Method
      */
-
-    /**
-     * construct.
-     *
-     * @param tcpChannel TcpChannel
-     */
-    public <A> TcpClient(TcpChannel tcpChannel, A attachment, CompletionHandler<Void, A> handler){
-        this.tcpChannel = tcpChannel;
-        AttachmentPacket<Void, A> attachmentPacket = new AttachmentPacket<>(attachment, null, handler);
-
-        this.startHandshakeMaster(attachmentPacket, (CompletionHandler)this.eventHandshake);
-    }
-
-
     /**
      * construct.
      */
     public TcpClient(){
-        this.tcpChannel = new TcpChannel();
+        this.tcpChannel = null;
     }
 
 
@@ -78,13 +67,20 @@ public class TcpClient extends TcpClientTransferEncrypt {
      */
 
     /**
-     * connect
+     * 建立連線
      *
-     * @param remoteAddress ip address.
+     * @param remoteAddress 連線目標位置。
+     * @param attachment 附件。
+     * @param handler 事件完成處理器。
+     * @param <A> 附件類型。
+     * @throws AlreadyConnectedException 原始類已連至其他目標。
      */
     public <A> void connect(SocketAddress remoteAddress, A attachment, CompletionHandler<Void, A> handler){
+        if(this.tcpChannel == null)
+            this.tcpChannel = new TcpChannel();
+
         if(this.tcpChannel.isConnect())
-            return;
+            throw new AlreadyConnectedException();
 
         AttachmentPacket<Void, A> attachmentPacket = new AttachmentPacket<>(attachment, null, handler);
         this.tcpChannel.connect(remoteAddress, attachmentPacket, (CompletionHandler)this.eventConnect);
@@ -92,14 +88,41 @@ public class TcpClient extends TcpClientTransferEncrypt {
 
 
     /**
-     * close
+     * 建立連線，依附已經連線的TcpChannel。
+     *
+     * @param tcpChannel 已經連線的TcpChannel。
+     * @param attachment 附件。
+     * @param handler 事件完成處理器。
+     * @param <A> 附件類型。
+     * @throws ConnectionPendingException 原始類已連至其他目標。
+     * @throws ShutdownChannelGroupException 輸入TcpChannel並未連線至目標。
+     */
+    public <A> void connect(TcpChannel tcpChannel, A attachment, CompletionHandler<Void, A> handler){
+        if(this.tcpChannel != null){
+            if(this.tcpChannel.isConnect())
+                throw new ConnectionPendingException();
+        }
+
+        if(!tcpChannel.isConnect())
+            throw new ShutdownChannelGroupException();
+
+
+        this.tcpChannel = tcpChannel;
+        AttachmentPacket<Void, A> attachmentPacket = new AttachmentPacket<>(attachment, null, handler);
+
+        this.startHandshakeMaster(attachmentPacket, (CompletionHandler)this.eventHandshake);
+    }
+
+
+    /**
+     * 關閉連線
      */
     public void disconnect(){
-        synchronized (this.tcpChannel){
-            if(this.tcpChannel.isConnect()){
+        try {
+            if(this.tcpChannel.isConnect())
                 this.tcpChannel.close();
-            }
-        }
+
+        }catch (Throwable ignore){}
     }
 
 

@@ -71,7 +71,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
         this.handshaking = true;
         Handshake handshake = new HandshakeMaster();
         handshake.action(this
-                , new AttachmentPacket<>(handler, attachment, null)
+                , new AttachmentPacket<>(attachment, null, handler)
                 , (CompletionHandler)this.eventHandshake);
     }
 
@@ -86,7 +86,7 @@ public abstract class TcpClientTransferEncrypt extends TcpClientTransfer {
         this.handshaking = true;
         Handshake handshake = new HandshakeSlave();
         handshake.action(this
-                , new AttachmentPacket<>(handler, attachment, null)
+                , new AttachmentPacket<>(attachment, null, handler)
                 , (CompletionHandler)this.eventHandshake);
     }
 

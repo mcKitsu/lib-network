@@ -1,6 +1,6 @@
 package net.mckitsu.lib.network.local;
 
-public class NetworkSlotManager {
+public abstract class NetworkSlotManager {
     /* **************************************************************************************
      *  Variable <Public>
      */
